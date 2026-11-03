@@ -17,6 +17,7 @@ import {
   subjectOptions, periodOptions,
 } from './planner.js';
 import { statsView } from './stats.js';
+import { viewingOtherWeek } from './archive.js';
 import { timer, remainingMs, formatMs, stageMs, startFor, toggle, reset, setStage, setAuto, setDurations } from '../timer.js';
 import { unlockAudio, chime, alarmSound } from '../audio.js';
 import { notify, notifyPermission, askNotifyPermission, canNotify } from '../notify.js';
@@ -110,6 +111,10 @@ function weekHeader(c) {
         </div>
         <button type="button" class="btn btn-ghost btn-sm !px-2" data-action="week-nav" data-to="${ids[idx + 1] || ''}" ${idx >= 0 && idx < ids.length - 1 ? '' : 'disabled'} aria-label="다음 주"><i class="fa-solid fa-chevron-right"></i></button>
       </div>
+      <div class="flex flex-wrap justify-center gap-2 -mt-1">
+        <button type="button" class="btn btn-secondary btn-sm" data-action="open-archive"><i class="fa-solid fa-book-bookmark"></i>지난 플래너 (${ids.length})</button>
+        ${viewingOtherWeek(ids, week.start) ? html`<button type="button" class="btn btn-primary btn-sm" data-action="week-current"><i class="fa-solid fa-calendar-day"></i>이번 주로</button>` : ''}
+      </div>
       ${week.goals?.length ? html`
         <div class="rounded-2xl bg-planner-light/60 border border-planner-border/30 p-3.5">
           <p class="text-xs font-black text-planner-dark mb-2">🎯 이번 주 목표</p>
@@ -145,7 +150,7 @@ function lateBanner(week) {
           <p class="text-sm text-white/90">오늘 첫 과제의 [🚀 시작]을 누르고 선생님께 알려 주세요.</p>
         </div>
       </div>
-      <button type="button" class="btn bg-white text-rose-700 hover:bg-rose-50 shrink-0" data-action="start-first">🚀 지금 시작</button>
+      <button type="button" class="btn bg-planner-surface text-rose-700 hover:bg-rose-50 shrink-0" data-action="start-first">🚀 지금 시작</button>
     </div>`;
 }
 
@@ -244,7 +249,7 @@ function taskCard(c, t) {
       </div>
 
       ${open ? html`
-        <div class="mt-3 rounded-2xl bg-white border border-amber-300 p-3.5 space-y-3">
+        <div class="mt-3 rounded-2xl bg-planner-surface border border-amber-300 p-3.5 space-y-3">
           <div>
             <div class="flex items-center justify-between">
               <label class="text-sm font-black text-slate-800" for="prog-${t.id}">어디까지 했나요?</label>
@@ -407,7 +412,7 @@ export const studentModals = {
         <div class="space-y-2">
           <p class="text-sm font-black text-slate-800">다 못 끝낸 과제가 ${tasks.length}개 있어요</p>
           ${tasks.map((t) => html`
-            <label class="flex items-start gap-2.5 rounded-xl border border-planner-border/30 bg-white p-2.5 cursor-pointer">
+            <label class="flex items-start gap-2.5 rounded-xl border border-planner-border/30 bg-planner-surface p-2.5 cursor-pointer">
               <input type="checkbox" class="mt-0.5 w-5 h-5 accent-green-700 shrink-0" data-change="cd-carry" data-id="${t.id}" ${targetWeek && !m.skip.includes(t.id) ? 'checked' : ''} ${targetWeek ? '' : 'disabled'} />
               <span class="min-w-0">
                 <span class="block text-sm font-bold text-slate-900">${t.title}</span>
@@ -423,7 +428,7 @@ export const studentModals = {
           <div class="flex flex-wrap gap-1.5">
             ${REASON_CHIPS.map((ch) => html`
               <button type="button" data-action="cd-chip" data-chip="${ch}"
-                class="rounded-full border px-3 py-1.5 text-sm font-bold transition ${m.chips.includes(ch) ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-600 border-slate-300 hover:border-amber-400'}">${ch}</button>`)}
+                class="rounded-full border px-3 py-1.5 text-sm font-bold transition ${m.chips.includes(ch) ? 'bg-amber-500 text-white border-amber-500' : 'bg-planner-surface text-slate-600 border-slate-300 hover:border-amber-400'}">${ch}</button>`)}
           </div>
           <textarea class="input" id="cd-reason" name="reason" rows="2" maxlength="200" placeholder="예: 수행평가 PPT 만드느라 화학 인강을 못 들었어요."></textarea>
           ${day.reason ? html`<p class="text-xs text-slate-500">지난번에 적은 이유: ${day.reason}</p>` : ''}

@@ -11,15 +11,15 @@ import {
 import { weekRef } from '../data.js';
 import { rateText } from './planner.js';
 
-// 차트 색: 지금 기간(강조)과 나머지. 카드 배경 대비 3:1 이상 (검사 통과)
-const ACCENT = '#3b6e22';
-const BASE = '#6f9a56';
+// 차트 색: 지금 기간(강조)과 나머지. 밝은·어두운 화면 색은 tailwind.config.js 의 --chart-* (대비 검사 통과)
+const ACCENT = 'var(--chart-accent)';
+const BASE = 'var(--chart-base)';
 
 // ---------- 지난 계획표 불러오기 (한 번 불러오면 기억) ----------
 const cache = new Map();
 const loading = new Set();
 
-function getWeek(c, weekId) {
+export function getWeek(c, weekId) {
   if (c.week && (c.week.start === weekId || c.weekId === weekId)) return { ...c.week, start: weekId };
   const key = `${c.uid}:${weekId}`;
   if (cache.has(key)) return cache.get(key);
@@ -80,7 +80,7 @@ function summarize(entries) {
 // ---------- 화면 조각 ----------
 function tile(label, value, sub = '') {
   return html`
-    <div class="rounded-2xl bg-white border border-planner-border/25 p-3">
+    <div class="rounded-2xl bg-planner-surface border border-planner-border/25 p-3">
       <p class="text-xs font-bold text-slate-500">${label}</p>
       <p class="text-2xl font-black text-slate-900 mt-0.5">${value}</p>
       ${sub ? html`<p class="text-[11px] text-slate-500 mt-0.5">${sub}</p>` : ''}
@@ -220,8 +220,8 @@ function weekMode(c) {
       ${tile('집중 완주', `${sum.focus}회`, '집중 타이머를 끝까지')}
       ${tile('다음 날로 이월', `${sum.carried}개`, '다 못 끝내 넘긴 과제')}
     </div>
-    ${columnChart(dayItems, { title: '요일별 달성률', caption: '막대에 손가락을 대거나 마우스를 올리면 시작 시각도 보여요. 진한 막대가 오늘이에요.' })}
-    ${trendOrNote(weekItems, pending, columnChart(weekItems, { title: `최근 ${weekItems.length}주 달성률 추이`, caption: `주 시작 날짜 기준${pending ? ' · 불러오는 중...' : ''}. 진한 막대가 지금 보는 주예요.`, height: 140 }), '2주')}
+    ${columnChart(dayItems, { title: '요일별 달성률', caption: '막대에 손가락을 대거나 마우스를 올리면 시작 시각도 보여요. 강조된 막대가 오늘이에요.' })}
+    ${trendOrNote(weekItems, pending, columnChart(weekItems, { title: `최근 ${weekItems.length}주 달성률 추이`, caption: `주 시작 날짜 기준${pending ? ' · 불러오는 중...' : ''}. 강조된 막대가 지금 보는 주예요.`, height: 140 }), '2주')}
     ${reasonsBox(sum.reasons)}
     ${tableView(entries)}`;
 }
@@ -296,9 +296,9 @@ function monthMode(c) {
       ${tile('다음 날로 이월', `${sum.carried}개`, '다 못 끝내 넘긴 과제')}
     </div>
     <div class="${pending ? 'opacity-60' : ''}">
-      ${columnChart(dayItems, { title: `${m}월 일별 달성률`, caption: `${pending ? '불러오는 중... · ' : ''}막대가 없는 날은 계획이 없던 날이에요. 진한 막대가 오늘이에요.` })}
+      ${columnChart(dayItems, { title: `${m}월 일별 달성률`, caption: `${pending ? '불러오는 중... · ' : ''}막대가 없는 날은 계획이 없던 날이에요. 강조된 막대가 오늘이에요.` })}
     </div>
-    ${trendOrNote(monthItems, pendingMonths, columnChart(monthItems, { title: '최근 6개월 달성률 추이', caption: `${pendingMonths ? '불러오는 중... · ' : ''}한 달 동안의 모든 과제 기준. 진한 막대가 지금 보는 달이에요.`, height: 140 }), '2개월')}
+    ${trendOrNote(monthItems, pendingMonths, columnChart(monthItems, { title: '최근 6개월 달성률 추이', caption: `${pendingMonths ? '불러오는 중... · ' : ''}한 달 동안의 모든 과제 기준. 강조된 막대가 지금 보는 달이에요.`, height: 140 }), '2개월')}
     ${reasonsBox(sum.reasons)}
     ${tableView(entries.filter((e) => e.tasks.length || e.day.startedAt))}`;
 }
@@ -339,7 +339,7 @@ function showTip(target) {
   if (!text) return;
   if (!tipEl) {
     tipEl = document.createElement('div');
-    tipEl.className = 'fixed z-[80] pointer-events-none rounded-lg bg-slate-900 text-white text-xs font-bold px-2.5 py-1.5 shadow-lg max-w-[80vw]';
+    tipEl.className = 'fixed z-[80] pointer-events-none rounded-lg bg-[#1e293b] text-white text-xs font-bold px-2.5 py-1.5 shadow-lg max-w-[80vw]';
     document.body.appendChild(tipEl);
   }
   tipEl.textContent = text;

@@ -44,6 +44,12 @@ npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only fi
 - `src/views/student.js` — `ctx()`가 '지금 보는 학생'을 돌려줌: 학생 본인 또는 강사 미리보기(`readOnly`, 선택한 학생·`S.t.week`). 쓰기 동작은 `blocked()`로 막는다. 안쪽 탭은 `S.ui.sview`(today|table|stats).
 - `src/views/stats.js` — 주간·월간 그래프(HTML 막대, 라이브러리 없음). 지난 주 문서는 기록 탭을 열 때만 `getDoc`으로 한 번 읽고 메모리에 기억.
 - 팝업 배경(`data-self`)은 배경을 직접 눌렀을 때만 닫힌다(main.js 클릭 처리). 팝업 안 폼 제출이 막혔던 버그가 있었음.
+- `src/views/archive.js` — 지난 플래너 목록 팝업(학생·강사 공용, `ctx()` 사용, 달성률은 stats.js `getWeek` 캐시로 한 번만 읽음), '이번 주로' 버튼.
+- 강사 계획표 편집은 `S.ui.tLayout`(day | week, 기기에 기억). week = `weekGrid()` 7일 카드, 과제 추가 폼은 hidden `date` 칸을 보냄.
+- 다크 모드: `tailwind.config.js`가 planner 색과 slate·amber 등 기본 색을 CSS 변수로 바꾸고 `html.dark`에서 어두운 값으로 뒤집는다. 화면 코드에는 `dark:`를 쓰지 않는다.
+  - 흰 바탕은 `bg-white` 대신 `bg-planner-surface`, 버튼 눌림은 `hover:bg-planner-deep`(planner-dark는 어두운 화면에서 밝은 글자색이라 바탕으로 쓰지 않음).
+  - 어두운 화면에서도 진해야 하는 것(팝업 배경 `bg-black/50`, 토스트·말풍선 `bg-[#1e293b]`)은 고정 색. 그래프 막대 색은 `--chart-accent`/`--chart-base`(밝은·어두운 화면 각각 대비 검사 통과).
+  - 모드 저장·적용은 `src/theme.js`, 깜빡임 방지는 index.html 머리의 짧은 스크립트.
 - 동작 함수 안에서 날짜가 필요하면 화면 그릴 때 정한 값에 기대지 말고 `currentDate()` / `editDate()`로 그 순간 계산한다 (렌더 전에 저장되면 날짜가 비는 버그가 있었음).
 
 ## Firestore 데이터 구조
@@ -65,4 +71,4 @@ npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only fi
 - 작업 브랜치 `claude/planner-app`에 커밋·push한 뒤 `main`으로 fast-forward push해서 배포한다(강사 동의 하에).
 
 ## 다음 후보 기능
-- 과제 순서 바꾸기, 다른 학생 계획표 복사(템플릿), 선생님 칭찬·피드백 댓글, 연속 시작 스트릭, 시험 D-day, 학부모 열람 링크.
+- 계획표 빨리 만들기(강 번호 자동 +1, 과제 묶음·다른 학생 복사), 앱 안 피드백 댓글, 오프라인 저장, 카톡 보내기 선택, 실제 공부 시간 집계, 시험 D-day, 학부모 열람 링크, 수강·결제일 관리, 기록 내보내기.

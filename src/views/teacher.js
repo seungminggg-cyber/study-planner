@@ -19,6 +19,7 @@ import {
   progressBar, dayTabs, weekTable, openShare, rateText, subjectOptions, periodOptions,
 } from './planner.js';
 import { studentView, ctx } from './student.js';
+import { viewingOtherWeek } from './archive.js';
 import { statsView } from './stats.js';
 import { pushCard, pushTeacherActions } from './pushSettings.js';
 
@@ -164,7 +165,7 @@ function studentList() {
           ${approved.map((u) => {
             const cur = weekContaining(u.weekIds || [], today);
             return html`
-              <button type="button" class="text-left rounded-xl border border-planner-border/30 bg-white hover:border-planner-green p-3 flex items-center gap-3" data-action="open-student" data-uid="${u.id}">
+              <button type="button" class="text-left rounded-xl border border-planner-border/30 bg-planner-surface hover:border-planner-green p-3 flex items-center gap-3" data-action="open-student" data-uid="${u.id}">
                 <span class="w-10 h-10 rounded-full bg-planner-light text-planner-dark font-black flex items-center justify-center shrink-0">${String(u.name || '?').slice(-2)}</span>
                 <span class="flex-1 min-w-0">
                   <span class="block font-black truncate">${u.name}</span>
@@ -223,7 +224,9 @@ function weekSelector(u, withCreate = true) {
       ${ids.length ? html`
         <select class="input !w-auto font-bold" data-change="t-pick-week" aria-label="주 선택">
           ${ids.map((id) => html`<option value="${id}" ${id === S.t.weekId ? 'selected' : ''}>${weekRangeText(id)}${weekContaining([id], today) ? ' (이번 주)' : id > today ? ' (예정)' : ''}</option>`)}
-        </select>` : ''}
+        </select>
+        <button type="button" class="btn btn-secondary btn-sm" data-action="open-archive"><i class="fa-solid fa-book-bookmark"></i>지난 플래너 (${ids.length})</button>
+        ${viewingOtherWeek(ids, S.t.weekId) ? html`<button type="button" class="btn btn-ghost btn-sm" data-action="week-current">이번 주로</button>` : ''}` : ''}
       ${withCreate ? html`<button type="button" class="btn ${S.ui.creatingWeek ? 'btn-secondary' : 'btn-primary'} btn-sm" data-action="toggle-create-week">
         <i class="fa-solid ${S.ui.creatingWeek ? 'fa-xmark' : 'fa-plus'}"></i>${S.ui.creatingWeek ? '닫기' : '새 주 만들기'}
       </button>` : ''}
@@ -259,7 +262,7 @@ function createWeekForm(u) {
         <button class="btn btn-primary w-full sm:w-auto" ${S.ui.busy ? 'disabled' : ''}><i class="fa-solid fa-check"></i>만들기</button>
       </form>
 
-      <details class="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+      <details class="rounded-xl border border-slate-200 bg-planner-surface p-3 text-sm">
         <summary class="cursor-pointer font-bold text-slate-600">예전 플래너(Netlify)에서 가져오기</summary>
         <form class="mt-3 space-y-2" data-submit="import-legacy">
           <p class="text-slate-600 leading-relaxed">예전 앱 코치 화면에서 <b>[🔗 현재 계획표·비밀번호가 담긴 전용 링크 복사]</b>를 누른 뒤, 복사된 주소를 아래에 붙여넣으세요. 날짜·과제·진행률·메모를 그대로 옮겨요. (예전 비밀번호는 가져오지 않아요)</p>
@@ -323,6 +326,12 @@ function weekEditor(u, week, settings) {
       </div>
     </section>
 
+    <div class="seg max-w-md">
+      <button type="button" class="seg-btn ${S.ui.tLayout !== 'week' ? 'active' : ''}" data-action="t-layout" data-layout="day"><i class="fa-solid fa-calendar-day"></i>요일별로 편집</button>
+      <button type="button" class="seg-btn ${S.ui.tLayout === 'week' ? 'active' : ''}" data-action="t-layout" data-layout="week"><i class="fa-solid fa-calendar-week"></i>7일 한 화면에</button>
+    </div>
+
+    ${S.ui.tLayout === 'week' ? weekGrid(week, settings) : html`
     ${dayTabs(week, date, 't-pick-day')}
 
     <section class="card space-y-4">
@@ -379,16 +388,73 @@ function weekEditor(u, week, settings) {
     <details class="space-y-2" ${S.ui.tShowTable ? 'open' : ''}>
       <summary class="cursor-pointer font-bold text-planner-dark text-sm" data-action="t-toggle-table">주간 전체표 보기</summary>
       <div class="mt-2">${weekTable(week, settings.periods, 't-pick-day')}</div>
-    </details>
+    </details>`}
 
     <div class="text-right">
       <button type="button" class="btn btn-danger btn-sm" data-action="t-delete-week"><i class="fa-solid fa-trash"></i>이 주 계획표 삭제</button>
     </div>`;
 }
 
+// ---------- 7일 한 화면 편집 ----------
+function weekGrid(week, settings) {
+  const today = todayKey();
+  return html`
+    <p class="text-sm text-slate-500">요일마다 칸에서 바로 고치면 자동으로 저장돼요. 과제를 넣을 때는 아래 칸에 내용을 쓰고 [추가]를 눌러요.</p>
+    <div class="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+      ${weekDates(week.start).map((date) => {
+        const day = week.days?.[date] || {};
+        const tasks = tasksOn(week, date);
+        const rate = rateOf(tasks);
+        return html`
+          <section class="card !p-3.5 space-y-2.5 ${date === today ? '!border-planner-green border-2' : ''}">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-1.5">
+                <span class="chip bg-planner-green text-white !text-sm">${dayTitle(date)}</span>
+                ${date === today ? html`<span class="chip bg-amber-100 text-amber-800">오늘</span>` : ''}
+                <span class="chip bg-planner-cream text-planner-dark">${rateText(rate)}</span>
+              </div>
+              <label class="flex items-center gap-1 text-xs font-bold text-planner-dark">⏰
+                <input type="time" class="input input-sm !w-auto !py-1" value="${day.target || settings.defaultTarget}" data-change="t-day-target" data-date="${date}" aria-label="${dayTitle(date)} 목표 시작" />
+              </label>
+            </div>
+            ${day.startedAt ? html`<p class="text-xs font-bold text-planner-green">✅ ${day.startedAt} 시작 인증</p>` : ''}
+            <div class="space-y-2">
+              ${tasks.length ? tasks.map((t) => compactTaskRow(t, settings)) : html`<p class="text-xs text-slate-400">과제 없음</p>`}
+            </div>
+            <form class="rounded-xl border border-dashed border-planner-border/50 p-2 space-y-1.5" data-submit="t-add-task">
+              <input type="hidden" name="date" value="${date}" />
+              <div class="grid grid-cols-3 gap-1.5">
+                <select class="input input-sm !px-1.5" id="qa-period-${date}" name="period" aria-label="구분">${periodOptions(settings.periods, S.ui.lastPeriod || settings.periods[0])}</select>
+                <select class="input input-sm !px-1.5" id="qa-subject-${date}" name="subject" aria-label="과목">${subjectOptions(S.ui.lastSubject || subjects()[0])}</select>
+                <input class="input input-sm !px-1.5" id="qa-time-${date}" name="time" maxlength="30" placeholder="시간" aria-label="시간" />
+              </div>
+              <div class="flex gap-1.5">
+                <input class="input input-sm flex-1" id="qa-title-${date}" name="title" maxlength="100" placeholder="새 과제" aria-label="과제 내용" />
+                <button class="btn btn-primary btn-sm shrink-0"><i class="fa-solid fa-plus"></i>추가</button>
+              </div>
+            </form>
+          </section>`;
+      })}
+    </div>`;
+}
+
+function compactTaskRow(t, settings) {
+  return html`
+    <div class="rounded-xl border p-2 space-y-1.5 ${t.status === 'done' ? 'border-emerald-300 bg-emerald-50/40' : t.status === 'partial' ? 'border-amber-300 bg-amber-50/30' : 'border-planner-border/30 bg-planner-surface'}">
+      <div class="flex items-center gap-1">
+        <select class="input input-sm !w-auto !px-1.5 !py-1 !text-xs" data-change="t-task-field" data-id="${t.id}" data-field="period" aria-label="구분">${periodOptions(settings.periods, t.period)}</select>
+        <input class="input input-sm !w-24 !px-1.5 !py-1 !text-xs" id="w-tt-${t.id}" value="${t.time || ''}" maxlength="30" placeholder="시간" data-change="t-task-field" data-id="${t.id}" data-field="time" aria-label="시간" />
+        <select class="input input-sm !w-auto !px-1.5 !py-1 !text-xs" data-change="t-task-field" data-id="${t.id}" data-field="subject" aria-label="과목">${subjectOptions(t.subject)}</select>
+        ${t.status === 'done' ? html`<span class="chip bg-emerald-100 text-emerald-800 !px-1.5">완료</span>` : t.status === 'partial' ? html`<span class="chip bg-amber-100 text-amber-800 !px-1.5">${t.progress}%</span>` : ''}
+        <button type="button" class="btn btn-danger btn-sm !px-1.5 ml-auto" data-action="t-task-del" data-id="${t.id}" aria-label="과제 삭제"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <input class="input input-sm !py-1 font-bold" id="w-ttl-${t.id}" value="${t.title}" maxlength="100" data-change="t-task-field" data-id="${t.id}" data-field="title" aria-label="과제 내용" />
+    </div>`;
+}
+
 function taskEditRow(t, settings) {
   return html`
-    <div class="rounded-2xl border p-3 space-y-2 ${t.status === 'done' ? 'border-emerald-300 bg-emerald-50/40' : t.status === 'partial' ? 'border-amber-300 bg-amber-50/30' : 'border-planner-border/30 bg-white'}">
+    <div class="rounded-2xl border p-3 space-y-2 ${t.status === 'done' ? 'border-emerald-300 bg-emerald-50/40' : t.status === 'partial' ? 'border-amber-300 bg-amber-50/30' : 'border-planner-border/30 bg-planner-surface'}">
       <div class="flex flex-wrap items-center gap-1.5">
         <select class="input input-sm !w-auto" data-change="t-task-field" data-id="${t.id}" data-field="period" aria-label="구분">${periodOptions(settings.periods, t.period)}</select>
         <input class="input input-sm !w-36" id="tt-${t.id}" value="${t.time || ''}" maxlength="30" placeholder="시간" data-change="t-task-field" data-id="${t.id}" data-field="time" aria-label="시간" />
@@ -521,7 +587,7 @@ function settingsView() {
       <h3 class="card-title"><i class="fa-solid fa-circle-info"></i>학생 초대 방법</h3>
       <p>1. 학생에게 아래 주소를 보내 주세요. 학생이 Google 또는 이메일로 가입하면 [학생] 탭에 '승인 대기'로 나타나요.</p>
       <div class="flex gap-2">
-        <code class="flex-1 truncate rounded-lg bg-white border border-slate-200 px-2 py-1.5 text-xs">${location.origin + location.pathname}</code>
+        <code class="flex-1 truncate rounded-lg bg-planner-surface border border-slate-200 px-2 py-1.5 text-xs">${location.origin + location.pathname}</code>
         <button type="button" class="btn btn-secondary btn-sm" data-action="copy-join-link">복사</button>
       </div>
       <p>2. 승인한 뒤 [계획표]에서 이번 주 계획을 만들어 주면 학생 화면에 바로 보여요.</p>
@@ -707,7 +773,13 @@ export const teacherActions = {
     S.ui.tShowTable = !S.ui.tShowTable;
     refresh();
   },
-  't-day-target': (el) => editWeek({ [`days.${editDate()}.target`]: el.value || '17:00' }),
+  't-day-target': (el) => editWeek({ [`days.${el.dataset.date || editDate()}.target`]: el.value || '17:00' }),
+  't-layout': (el) => {
+    flushSaves();
+    S.ui.tLayout = el.dataset.layout;
+    savePref('tLayout', S.ui.tLayout);
+    refresh();
+  },
   't-clear-start': () => {
     if (!confirm('이 날의 시작 기록을 지울까요?')) return;
     return editWeek({ [`days.${editDate()}.startedAt`]: null });
@@ -717,7 +789,7 @@ export const teacherActions = {
     if (!title) return toast('과제 내용을 입력해 주세요.', 'error');
     S.ui.lastPeriod = String(data.get('period') || '');
     S.ui.lastSubject = String(data.get('subject') || '');
-    const date = editDate();
+    const date = String(data.get('date') || '') || editDate();
     if (!date) return toast('날짜를 먼저 골라 주세요.', 'error');
     const id = makeTaskId();
     await editWeek({

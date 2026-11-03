@@ -39,10 +39,10 @@
     @apply px-3 py-1.5 text-xs rounded-lg;
   }
   .btn-primary {
-    @apply bg-planner-green text-white hover:bg-planner-dark active:bg-planner-dark;
+    @apply bg-planner-green text-white hover:bg-planner-deep active:bg-planner-deep;
   }
   .btn-secondary {
-    @apply bg-white text-slate-700 border border-planner-border/40 hover:bg-planner-light;
+    @apply bg-planner-surface text-slate-700 border border-planner-border/40 hover:bg-planner-light;
   }
   .btn-ghost {
     @apply text-slate-500 hover:text-planner-dark hover:bg-planner-light;
@@ -54,7 +54,7 @@
     @apply bg-amber-500 text-white hover:bg-amber-600;
   }
   .input {
-    @apply w-full rounded-xl border border-planner-border/40 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition
+    @apply w-full rounded-xl border border-planner-border/40 bg-planner-surface px-3 py-2.5 text-sm text-slate-900 outline-none transition
       placeholder:text-slate-400 focus:border-planner-green focus:ring-2 focus:ring-planner-light;
   }
   .input-sm {
@@ -73,13 +73,13 @@
     @apply flex-1 rounded-xl px-3 py-2 text-sm font-bold text-slate-600 transition hover:text-planner-dark flex items-center justify-center gap-1.5 whitespace-nowrap;
   }
   .seg-btn.active {
-    @apply bg-white text-planner-dark shadow-sm;
+    @apply bg-planner-surface text-planner-dark shadow-sm;
   }
   .empty {
     @apply rounded-2xl border border-dashed border-planner-border/40 p-6 text-center text-sm text-slate-500 bg-planner-card;
   }
   .modal-back {
-    @apply fixed inset-0 z-50 bg-slate-900/50 flex items-end sm:items-center justify-center p-0 sm:p-4;
+    @apply fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4;
   }
   .modal-box {
     @apply w-full sm:max-w-lg max-h-[90vh] overflow-y-auto bg-planner-card rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 shadow-2xl space-y-4
@@ -89,8 +89,13 @@
 
 /* 범위 슬라이더 */
 input[type='range'] {
-  accent-color: #3b6e22;
+  accent-color: rgb(var(--p-green));
   height: 28px;
+}
+
+/* 어두운 화면: 초록 글자는 더 밝게 (어두운 바탕에서 잘 보이도록) */
+html.dark .text-planner-green {
+  color: #8fc46a;
 }
 
 #toast[data-type='error'] {
@@ -100,5 +105,5 @@ input[type='range'] {
 /* 주간표: 폰에서는 옆으로 밀어서 보기 */
 .week-table th,
 .week-table td {
-  border: 1.5px solid #55823b;
+  border: 1.5px solid rgb(var(--p-border));
 }

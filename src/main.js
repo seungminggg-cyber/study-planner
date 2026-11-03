@@ -1,6 +1,6 @@
 import './style.css';
 import morphdom from 'morphdom';
-import { S, onRender, refresh, ensureWatches, appTitle, teacherName, loadPref } from './store.js';
+import { S, onRender, refresh, ensureWatches, appTitle, teacherName, loadPref, savePref } from './store.js';
 import { html } from './lib/html.js';
 import { toast, flushSaves } from './lib/util.js';
 import { drafts } from './lib/drafts.js';
@@ -12,13 +12,20 @@ import { studentView, studentActions, studentModals, checkStudyAlarm } from './v
 import { teacherView, teacherActions } from './views/teacher.js';
 import { statsActions } from './views/stats.js';
 import { pushActions, studentPushModal } from './views/pushSettings.js';
+import { archiveActions, archiveModal } from './views/archive.js';
 import { syncTimer } from './push.js';
+import { THEMES, themeMode, applyTheme, cycleTheme } from './theme.js';
 import { installBanner, installActions, registerServiceWorker } from './install.js';
 import { initTimer, timer, remainingMs, formatMs, stageMs } from './timer.js';
 import { patchWeek, focusIncrementPatch } from './data.js';
 
 const actions = {
-  ...authActions, ...plannerActions, ...studentActions, ...teacherActions, ...installActions, ...statsActions, ...pushActions,
+  ...authActions, ...plannerActions, ...studentActions, ...teacherActions, ...installActions, ...statsActions, ...pushActions, ...archiveActions,
+  'theme-cycle': () => {
+    const t = cycleTheme();
+    toast(`화면 모드: ${THEMES[t].label}${t === 'auto' ? ' (폰·컴퓨터 설정을 따라가요)' : ''}`);
+    refresh();
+  },
 };
 
 // ---------- 화면 구성 ----------
@@ -51,6 +58,7 @@ function appShell(content) {
           ${!isTeacher ? html`
             <button type="button" class="btn btn-sm btn-ghost !px-2.5" data-action="open-push-settings" aria-label="폰 알림 설정" title="폰 알림 설정"><i class="fa-solid fa-bell text-base"></i></button>
             <button type="button" class="btn btn-sm bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200" data-action="open-guide"><i class="fa-solid fa-circle-question"></i><span class="hidden sm:inline">이용 방법</span></button>` : ''}
+          <button type="button" class="btn btn-ghost btn-sm !px-2.5" data-action="theme-cycle" title="화면 모드: ${THEMES[themeMode()].label}" aria-label="화면 모드 바꾸기 (지금: ${THEMES[themeMode()].label})"><i class="fa-solid ${THEMES[themeMode()].icon} text-base"></i></button>
           <button type="button" class="btn btn-ghost btn-sm" data-action="logout" title="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i><span class="hidden sm:inline">로그아웃</span></button>
         </div>
       </div>
@@ -67,7 +75,7 @@ function appShell(content) {
             </button>`)}
         </div>
       </nav>` : ''}
-    ${modalView({ ...studentModals, pushSettings: studentPushModal })}
+    ${modalView({ ...studentModals, pushSettings: studentPushModal, archive: archiveModal })}
   `;
 }
 
@@ -119,6 +127,7 @@ function render() {
 let guideShown = false;
 
 onRender(render);
+applyTheme();
 
 // ---------- 이벤트 연결 ----------
 function errorMessage(err) {
@@ -183,6 +192,11 @@ document.addEventListener('change', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && S.ui.modal) {
+    // 이용 안내를 Esc로 닫아도 '봤음'으로 기억하고, 시작 시간 알림이 필요한지 확인
+    if (S.ui.modal.type === 'guide') {
+      savePref('guideSeen', true);
+      window.dispatchEvent(new Event('planner:check-alarm'));
+    }
     S.ui.modal = null;
     refresh();
   }

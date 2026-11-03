@@ -13,12 +13,22 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="학습 플래너" />
     <title>승민T 학습 플래너</title>
+    <script>
+      // 화면이 그려지기 전에 어두운 화면 여부를 먼저 정해서 깜빡임을 막아요
+      (function () {
+        try {
+          var t = JSON.parse(localStorage.getItem('planner:theme') || '"auto"');
+          var dark = t === 'dark' || (t !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (dark) document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="app">
-      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;color:#64748b;font-size:14px">불러오는 중...</div>
+      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;color:#94a3b8;font-size:14px">불러오는 중...</div>
     </div>
-    <div id="toast" class="hidden fixed z-[70] left-1/2 -translate-x-1/2 bottom-24 lg:bottom-8 max-w-[90vw] rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-xl" role="status" aria-live="polite"></div>
+    <div id="toast" class="hidden fixed z-[70] left-1/2 -translate-x-1/2 bottom-24 lg:bottom-8 max-w-[90vw] rounded-xl bg-[#1e293b] px-4 py-3 text-sm font-medium text-white shadow-xl" role="status" aria-live="polite"></div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

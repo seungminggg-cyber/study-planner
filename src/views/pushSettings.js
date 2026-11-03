@@ -25,7 +25,7 @@ function ago(ts) {
 
 function toggleRow(key, label, desc, cfg, disabled = false) {
   return html`
-    <label class="flex items-start gap-3 rounded-xl border border-planner-border/25 bg-white p-3 cursor-pointer ${disabled ? 'opacity-50' : ''}">
+    <label class="flex items-start gap-3 rounded-xl border border-planner-border/25 bg-planner-surface p-3 cursor-pointer ${disabled ? 'opacity-50' : ''}">
       <input type="checkbox" class="mt-0.5 w-5 h-5 accent-green-700 shrink-0" data-change="push-toggle" data-key="${key}" ${cfg[key] ? 'checked' : ''} ${disabled ? 'disabled' : ''} />
       <span>
         <span class="block text-sm font-bold text-slate-900">${label}</span>
@@ -49,7 +49,7 @@ function deviceBox(who) {
     return html`<p class="text-sm rounded-xl bg-slate-100 p-3 text-slate-600">이 브라우저에서는 알림을 받을 수 없어요. 안드로이드는 크롬, 컴퓨터는 크롬·엣지에서 열어 주세요.</p>`;
   }
   return html`
-    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border ${on ? 'border-emerald-300 bg-emerald-50' : 'border-planner-border/30 bg-white'} p-3">
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl border ${on ? 'border-emerald-300 bg-emerald-50' : 'border-planner-border/30 bg-planner-surface'} p-3">
       <p class="text-sm font-bold ${on ? 'text-emerald-800' : 'text-slate-700'}">
         ${on ? html`<i class="fa-solid fa-bell mr-1"></i>이 기기에서 알림을 받고 있어요` : html`<i class="fa-regular fa-bell-slash mr-1"></i>이 기기는 알림이 꺼져 있어요`}
       </p>
@@ -93,7 +93,7 @@ export function pushCard() {
         <label class="flex items-center gap-2 cursor-pointer select-none">
           <span class="text-sm font-black ${cfg.on ? 'text-planner-green' : 'text-slate-500'}">${cfg.on ? '켜짐' : '꺼짐'}</span>
           <input type="checkbox" class="sr-only peer" data-change="push-toggle" data-key="on" ${cfg.on ? 'checked' : ''} aria-label="폰 알림 전체 켜기" />
-          <span class="relative w-12 h-7 rounded-full bg-slate-300 peer-checked:bg-planner-green transition after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition peer-checked:after:translate-x-5"></span>
+          <span class="relative w-12 h-7 rounded-full bg-slate-300 peer-checked:bg-planner-green transition after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:rounded-full after:bg-planner-surface after:shadow after:transition peer-checked:after:translate-x-5"></span>
         </label>
       </div>
 
@@ -111,7 +111,7 @@ export function pushCard() {
           <p class="label !mb-0">선생님에게 보내는 알림</p>
           ${toggleRow('teacherLate', '⏰ 30분 넘게 늦은 학생', '학생 이름을 모아서 알려 줘요 (학생마다 하루 한 번)', cfg, !cfg.on)}
           ${toggleRow('summary', '📊 하루 요약', '시작한 학생 수, 미시작 학생, 평균 달성률', cfg, !cfg.on)}
-          <label class="flex items-center justify-between gap-2 rounded-xl border border-planner-border/25 bg-white p-3 text-sm font-bold ${!cfg.on || !cfg.summary ? 'opacity-50' : ''}">
+          <label class="flex items-center justify-between gap-2 rounded-xl border border-planner-border/25 bg-planner-surface p-3 text-sm font-bold ${!cfg.on || !cfg.summary ? 'opacity-50' : ''}">
             하루 요약 받을 시각
             <input type="time" class="input input-sm !w-auto" value="${cfg.summaryTime}" data-change="push-summary-time" ${!cfg.on || !cfg.summary ? 'disabled' : ''} />
           </label>

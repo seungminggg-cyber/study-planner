@@ -70,11 +70,11 @@ export function dayTabs(week, selected, action) {
         const badge = rate === null ? 'bg-slate-100 text-slate-400' : rate === 100 ? 'bg-emerald-100 text-emerald-800' : rate > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-500';
         return html`
           <button type="button" data-action="${action}" data-date="${date}"
-            class="relative rounded-2xl border p-1.5 sm:p-2.5 text-left transition flex flex-col gap-1.5 ${on ? 'bg-planner-green text-white border-planner-dark shadow-md' : 'bg-white hover:bg-planner-light text-slate-800 border-planner-border/30'}">
+            class="relative rounded-2xl border p-1.5 sm:p-2.5 text-left transition flex flex-col gap-1.5 ${on ? 'bg-planner-green text-white border-planner-dark shadow-md' : 'bg-planner-surface hover:bg-planner-light text-slate-800 border-planner-border/30'}">
             ${date === today ? html`<span class="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-slate-900 leading-4">오늘</span>` : ''}
             <span class="flex items-baseline justify-between gap-1">
               <span class="text-xs sm:text-sm font-black">${info.ko}</span>
-              <span class="text-[10px] sm:text-[11px] font-bold ${on ? 'text-emerald-100' : 'text-slate-400'}">${info.md}</span>
+              <span class="text-[10px] sm:text-[11px] font-bold ${on ? 'text-white/80' : 'text-slate-400'}">${info.md}</span>
             </span>
             <span class="flex items-center justify-between gap-1">
               <span class="text-[10px] font-extrabold px-1 sm:px-1.5 py-0.5 rounded-md ${on ? 'bg-white/20 text-white' : badge}">${rate === null ? '-' : `${rate}%`}</span>
@@ -98,9 +98,9 @@ export function weekTable(week, periods, action) {
               const i = dayInfo(date);
               const rate = dayRate(week, date);
               return html`
-                <th class="py-2 px-2 text-center cursor-pointer hover:bg-planner-dark" data-action="${action}" data-date="${date}">
+                <th class="py-2 px-2 text-center cursor-pointer hover:bg-planner-deep" data-action="${action}" data-date="${date}">
                   <div class="text-sm font-black">${i.en}(${i.md})</div>
-                  <div class="text-[11px] font-bold text-emerald-100">달성 ${rateText(rate)}</div>
+                  <div class="text-[11px] font-bold text-white/80">달성 ${rateText(rate)}</div>
                 </th>`;
             })}
           </tr>
@@ -116,7 +116,7 @@ export function weekTable(week, periods, action) {
                     <div class="space-y-1.5">
                       ${tasks.length ? tasks.map((t) => html`
                         <button type="button" data-action="${action}" data-date="${date}" data-task="${t.id}"
-                          class="w-full text-left rounded-xl bg-white border border-planner-border/30 hover:border-planner-green p-1.5 space-y-1 shadow-sm">
+                          class="w-full text-left rounded-xl bg-planner-surface border border-planner-border/30 hover:border-planner-green p-1.5 space-y-1 shadow-sm">
                           <div class="flex items-center justify-between gap-1">
                             <span class="text-[10px] font-bold text-slate-500 truncate">${cleanTime(t.time)}</span>
                             ${t.status === 'done' ? html`<span class="text-[10px] font-black text-emerald-700">✅</span>` : t.status === 'partial' ? html`<span class="text-[10px] font-black text-amber-700">🟡${t.progress}%</span>` : ''}

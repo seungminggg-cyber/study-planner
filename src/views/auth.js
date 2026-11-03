@@ -138,7 +138,7 @@ export function profileSetupView() {
       <p class="text-xs text-slate-400 text-center">${S.user?.email || ''} 계정으로 로그인됨 · <button type="button" class="underline hover:text-slate-600" data-action="logout">로그아웃</button></p>
     </div>
 
-    <details class="text-sm text-slate-500 rounded-xl border border-slate-200 bg-white p-4">
+    <details class="text-sm text-slate-500 rounded-xl border border-slate-200 bg-planner-surface p-4">
       <summary class="cursor-pointer font-medium text-slate-600">강사(관리자) 계정으로 쓰시려면</summary>
       <div class="mt-3 space-y-2 leading-relaxed">
         <p>Firebase 콘솔 → Firestore → <b>admins</b> 컬렉션에 아래 ID로 문서를 만든 뒤 새로고침하세요.</p>

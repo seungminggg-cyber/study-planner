@@ -58,6 +58,7 @@ export const S = {
     sub: loadPref('sub', 'plan'), // plan | settings | report
     tWeekId: '',
     tDate: '',
+    tLayout: loadPref('tLayout', 'day'), // 계획표 편집: day(요일별) | week(7일 한 화면)
     creatingWeek: false,
   },
 };
