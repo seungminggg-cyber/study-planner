@@ -10,12 +10,15 @@ import {
 import { modalView, plannerActions } from './views/planner.js';
 import { studentView, studentActions, studentModals, checkStudyAlarm } from './views/student.js';
 import { teacherView, teacherActions } from './views/teacher.js';
+import { statsActions } from './views/stats.js';
+import { pushActions, studentPushModal } from './views/pushSettings.js';
+import { syncTimer } from './push.js';
 import { installBanner, installActions, registerServiceWorker } from './install.js';
 import { initTimer, timer, remainingMs, formatMs, stageMs } from './timer.js';
 import { patchWeek, focusIncrementPatch } from './data.js';
 
 const actions = {
-  ...authActions, ...plannerActions, ...studentActions, ...teacherActions, ...installActions,
+  ...authActions, ...plannerActions, ...studentActions, ...teacherActions, ...installActions, ...statsActions, ...pushActions,
 };
 
 // ---------- 화면 구성 ----------
@@ -45,7 +48,9 @@ function appShell(content) {
               </button>`)}
           </nav>` : ''}
         <div class="flex items-center gap-1.5 shrink-0">
-          ${!isTeacher ? html`<button type="button" class="btn btn-sm bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200" data-action="open-guide"><i class="fa-solid fa-circle-question"></i><span class="hidden sm:inline">이용 방법</span></button>` : ''}
+          ${!isTeacher ? html`
+            <button type="button" class="btn btn-sm btn-ghost !px-2.5" data-action="open-push-settings" aria-label="폰 알림 설정" title="폰 알림 설정"><i class="fa-solid fa-bell text-base"></i></button>
+            <button type="button" class="btn btn-sm bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200" data-action="open-guide"><i class="fa-solid fa-circle-question"></i><span class="hidden sm:inline">이용 방법</span></button>` : ''}
           <button type="button" class="btn btn-ghost btn-sm" data-action="logout" title="로그아웃"><i class="fa-solid fa-arrow-right-from-bracket"></i><span class="hidden sm:inline">로그아웃</span></button>
         </div>
       </div>
@@ -62,7 +67,7 @@ function appShell(content) {
             </button>`)}
         </div>
       </nav>` : ''}
-    ${modalView(studentModals)}
+    ${modalView({ ...studentModals, pushSettings: studentPushModal })}
   `;
 }
 
@@ -139,6 +144,8 @@ async function run(name, ...args) {
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || el.disabled) return;
+  // 팝업 배경은 배경을 직접 눌렀을 때만 닫음 (팝업 안의 저장 버튼·체크박스는 그대로 동작해야 함)
+  if (el.dataset.self && e.target !== el) return;
   if (el.tagName !== 'A') e.preventDefault();
   run(el.dataset.action, el, e);
 });
@@ -216,6 +223,8 @@ initTimer({
     const sig = `${timer.stage}|${timer.running}|${timer.taskId}`;
     if (sig !== lastSig || evt) {
       lastSig = sig;
+      // 폰 알림을 켠 학생이면 타이머 끝나는 시각을 서버에 알려 둠 (앱을 닫아도 끝나면 알림)
+      if (S.role === 'student') syncTimer(S.user?.uid, timer);
       refresh();
     }
   },

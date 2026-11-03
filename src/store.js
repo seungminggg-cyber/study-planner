@@ -38,9 +38,15 @@ export const S = {
     weekId: '',
     note: '',
     noteLoaded: false,
+    push: {}, // 설정 탭: uid → 알림 기기 정보
+    pushStatus: null,
   },
+  myPush: null,
   ui: {
-    tab: '', // 학생: today | table, 강사: dash | students | settings
+    tab: '', // 강사: dash | students | settings
+    sview: 'today', // 학생 화면 안쪽 탭: today | table | stats
+    statsMode: 'week', // 기록: week | month
+    statsMonth: '', // 기록에서 보는 달 'YYYY-MM'
     date: '', // 학생이 보고 있는 날짜
     weekId: '', // 학생이 직접 고른 주 (비어 있으면 이번 주)
     openTask: '',
@@ -150,8 +156,10 @@ function setRole(next) {
   stopPrefix('e:');
   S.week = undefined;
   S.weekId = '';
-  S.t = { users: [], usersLoaded: false, current: {}, week: undefined, weekId: '', note: '', noteLoaded: false };
-  S.ui.tab = next === 'teacher' ? loadPref('tTab', 'dash') : 'today';
+  stopPrefix('s:');
+  S.t = { users: [], usersLoaded: false, current: {}, week: undefined, weekId: '', note: '', noteLoaded: false, push: {}, pushStatus: null };
+  S.ui.tab = next === 'teacher' ? loadPref('tTab', 'dash') : '';
+  S.ui.sview = 'today';
   S.ui.date = '';
   S.ui.weekId = '';
   S.ui.modal = null;
@@ -176,6 +184,27 @@ export function ensureWatches() {
       stopPrefix('e:');
       S.t.weekId = '';
     }
+    // 설정 탭: 폰 알림을 켠 기기 수와 알림 서버 상태
+    if (S.ui.tab === 'settings') {
+      if (!subs.has('s:push')) {
+        listen('s:push', collection(db, 'push'), (snap) => {
+          S.t.push = snap ? Object.fromEntries(snap.docs.map((d) => [d.id, d.data()])) : {};
+        });
+        listen('s:pushStatus', doc(db, 'config', 'push_status'), (snap) => {
+          S.t.pushStatus = snap && snap.exists() ? snap.data() : null;
+        });
+      }
+    } else stopPrefix('s:');
+  }
+  // 학생: 내 알림 설정 (알림 팝업을 열었을 때만)
+  if (S.role === 'student') {
+    if (S.ui.modal?.type === 'pushSettings') {
+      if (!subs.has('p:push')) {
+        listen('p:push', doc(db, 'push', S.user.uid), (snap) => {
+          S.myPush = snap && snap.exists() ? snap.data() : null;
+        });
+      }
+    } else stop('p:push');
   }
 }
 

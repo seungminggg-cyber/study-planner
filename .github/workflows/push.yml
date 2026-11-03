@@ -1,0 +1,33 @@
+# 10분마다 폰 알림을 확인해서 보냅니다. (GitHub 사정에 따라 몇 분 늦게 실행될 수 있어요)
+# 필요한 것: 저장소 Settings → Secrets and variables → Actions 에 FIREBASE_SERVICE_ACCOUNT
+# 선생님 앱 [설정]에서 폰 알림을 꺼 두면 확인만 하고 아무것도 보내지 않아요.
+name: Send phone notifications
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: push
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/push/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: scripts/push
+      - run: node scripts/push/send.mjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

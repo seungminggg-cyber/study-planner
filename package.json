@@ -8,7 +8,7 @@
     "dev:emu": "VITE_USE_EMULATOR=1 vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/week.test.js",
+    "test": "node --test tests/week.test.js tests/push.test.js",
     "test:rules": "node --test tests/rules.test.js"
   },
   "dependencies": {

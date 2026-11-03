@@ -18,6 +18,9 @@ import {
 import {
   progressBar, dayTabs, weekTable, openShare, rateText, subjectOptions, periodOptions,
 } from './planner.js';
+import { studentView, ctx } from './student.js';
+import { statsView } from './stats.js';
+import { pushCard, pushTeacherActions } from './pushSettings.js';
 
 const selUser = () => S.t.users.find((u) => u.id === S.ui.sel);
 
@@ -181,12 +184,35 @@ function studentPage(u) {
     <div class="flex flex-wrap items-center gap-2">
       <button type="button" class="btn btn-ghost btn-sm" data-action="close-student"><i class="fa-solid fa-arrow-left"></i>학생 목록</button>
       <h2 class="text-xl font-black text-planner-dark mr-auto">${u.name}</h2>
-      <div class="seg w-full sm:w-auto">
-        ${[['plan', '계획표', 'fa-calendar-week'], ['report', '메모·리포트', 'fa-file-lines'], ['settings', '학생 설정', 'fa-gear']].map(([id, label, icon]) => html`
-          <button type="button" class="seg-btn ${sub === id ? 'active' : ''}" data-action="t-sub" data-sub="${id}"><i class="fa-solid ${icon}"></i>${label}</button>`)}
+      <div class="w-full lg:w-auto overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div class="seg w-max lg:w-auto">
+          ${[['plan', '계획표', 'fa-calendar-week'], ['preview', '학생 화면', 'fa-mobile-screen'], ['stats', '기록', 'fa-chart-column'], ['report', '메모·리포트', 'fa-file-lines'], ['settings', '설정', 'fa-gear']].map(([id, label, icon]) => html`
+            <button type="button" class="seg-btn ${sub === id ? 'active' : ''}" data-action="t-sub" data-sub="${id}"><i class="fa-solid ${icon}"></i>${label}</button>`)}
+        </div>
       </div>
     </div>
-    ${sub === 'settings' ? studentSettings(u) : sub === 'report' ? reportPage(u) : planPage(u)}`;
+    ${sub === 'settings' ? studentSettings(u)
+      : sub === 'report' ? reportPage(u)
+        : sub === 'preview' ? previewPage(u)
+          : sub === 'stats' ? statsPage(u)
+            : planPage(u)}`;
+}
+
+// 학생이 보는 화면을 그대로 (보기 전용)
+function previewPage(u) {
+  if (!(u.weekIds || []).length) return html`<div class="empty">아직 계획표가 없어요. [계획표] 탭에서 만들어 주세요.</div>`;
+  return html`
+    <div class="rounded-2xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-900 flex items-center gap-2">
+      <i class="fa-solid fa-eye"></i>
+      <span class="flex-1"><b>${u.name}</b> 학생이 보는 화면이에요. 보기 전용이라 눌러도 바뀌지 않아요.</span>
+    </div>
+    <div class="rounded-3xl border-4 border-slate-200 bg-planner-bg p-3 sm:p-5 space-y-5">${studentView()}</div>`;
+}
+
+function statsPage(u) {
+  if (!(u.weekIds || []).length) return html`<div class="empty">아직 계획표가 없어요.</div>`;
+  if (S.t.week === undefined) return html`<div class="py-10 text-center text-sm text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>불러오는 중...</div>`;
+  return html`${weekSelector(u, false)}${statsView(ctx())}`;
 }
 
 function weekSelector(u, withCreate = true) {
@@ -332,6 +358,12 @@ function weekEditor(u, week, settings) {
         </div>
       </form>
 
+      ${day.reason || day.closedAt ? html`
+        <div class="rounded-xl bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900">
+          ${day.closedAt ? html`<p class="font-bold">🏁 ${day.closedAt}에 하루 마무리</p>` : ''}
+          ${day.reason ? html`<p><b>📝 다 못 한 이유:</b> ${day.reason}</p>` : ''}
+        </div>` : ''}
+
       ${day.memo ? html`
         <div class="rounded-xl bg-planner-light/50 border border-planner-border/30 p-3 text-sm">
           <p class="font-black text-planner-dark mb-1">🧠 학생 인출 메모</p>
@@ -366,7 +398,8 @@ function taskEditRow(t, settings) {
           <option value="partial" ${t.status === 'partial' ? 'selected' : ''}>부분 완료 ${t.status === 'partial' ? `(${t.progress}%)` : ''}</option>
           <option value="done" ${t.status === 'done' ? 'selected' : ''}>완료</option>
         </select>
-        ${t.by === 'student' ? html`<span class="chip bg-slate-100 text-slate-500">학생이 추가</span>` : ''}
+        ${t.by === 'student' ? html`<span class="chip bg-slate-100 text-slate-500">${t.from ? '학생이 이월' : '학생이 추가'}</span>` : ''}
+        ${t.carriedTo ? html`<span class="chip bg-sky-100 text-sky-800">↪️ ${dayTitle(t.carriedTo)}로 이월</span>` : ''}
         <button type="button" class="btn btn-danger btn-sm !px-2 ml-auto" data-action="t-task-del" data-id="${t.id}" aria-label="과제 삭제"><i class="fa-solid fa-trash-can"></i></button>
       </div>
       <input class="input input-sm font-bold" id="ttl-${t.id}" value="${t.title}" maxlength="100" data-change="t-task-field" data-id="${t.id}" data-field="title" aria-label="과제 내용" />
@@ -482,6 +515,8 @@ function settingsView() {
       </form>
     </section>
 
+    ${pushCard()}
+
     <section class="card space-y-2 text-sm text-slate-600">
       <h3 class="card-title"><i class="fa-solid fa-circle-info"></i>학생 초대 방법</h3>
       <p>1. 학생에게 아래 주소를 보내 주세요. 학생이 Google 또는 이메일로 가입하면 [학생] 탭에 '승인 대기'로 나타나요.</p>
@@ -511,6 +546,7 @@ function findEditTask(id) {
 }
 
 export const teacherActions = {
+  ...pushTeacherActions,
   't-tab': (el) => {
     flushSaves();
     S.ui.tab = el.dataset.tab;
@@ -526,6 +562,8 @@ export const teacherActions = {
     S.ui.creatingWeek = false;
     S.ui.newStart = '';
     S.ui.parentComment = undefined;
+    S.ui.sview = 'today';
+    S.ui.statsMonth = '';
     savePref('sel', S.ui.sel);
     savePref('tTab', 'students');
     refresh();

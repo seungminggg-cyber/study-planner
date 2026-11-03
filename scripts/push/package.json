@@ -1,0 +1,9 @@
+{
+  "name": "planner-push-sender",
+  "private": true,
+  "type": "module",
+  "description": "GitHub Actions에서 10분마다 실행되어 폰 알림을 보내는 스크립트",
+  "dependencies": {
+    "firebase-admin": "13.0.2"
+  }
+}

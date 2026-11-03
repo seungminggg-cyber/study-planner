@@ -73,5 +73,15 @@ service cloud.firestore {
     match /notes/{uid} {
       allow read, write: if isTeacher();
     }
+
+    // 폰 알림: 기기 알림 주소(토큰)와 타이머 끝나는 시각. 본인 것만 쓰고, 강사는 몇 명이 켰는지 볼 수 있음
+    // (알림을 실제로 보내는 일은 GitHub의 서버 스크립트가 관리자 권한으로 함)
+    match /push/{uid} {
+      allow read: if isTeacher() || isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['tokens', 'timerEndAt', 'timerStage', 'timerLabel', 'updatedAt', 'sent'])
+        && (!('tokens' in request.resource.data) || (request.resource.data.tokens is list && request.resource.data.tokens.size() <= 10));
+      allow delete: if isOwner(uid) || isTeacher();
+    }
   }
 }

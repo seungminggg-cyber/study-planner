@@ -35,8 +35,12 @@ export const DEFAULT_GUIDE = [
     desc: '끝낸 만큼 진행률을 고르고 어디까지 했는지 솔직하게 적어 주세요. 남은 분량은 [내일로 넘기기]로 옮길 수 있어요.',
   },
   {
-    title: '4️⃣ 공부를 마쳤다면: [📲 마감 보고]',
-    desc: '오늘 기록이 정리된 카톡 문구가 만들어져요. 선생님께 보내면 끝!',
+    title: '4️⃣ 공부를 마쳤다면: [🏁 마무리 + 보고]',
+    desc: '다 못 끝낸 과제는 다음 날로 넘기고, 못 한 이유를 간단히 적어요. 그다음 만들어진 카톡 문구를 선생님께 보내면 끝!',
+  },
+  {
+    title: '5️⃣ 🔔 알림과 📊 기록',
+    desc: '위쪽 🔔 버튼에서 폰 알림을 켜면 앱을 닫아도 시작 시간·타이머 알림이 와요. [기록] 탭에서는 이번 주·이번 달 그래프를 볼 수 있어요.',
   },
 ];
 
@@ -238,6 +242,47 @@ export function taskLabel(t) {
   return `[${t.subject}] ${title}`;
 }
 
+// ---------- 다 못 끝낸 과제 이월 + 못 한 이유 ----------
+export const REASON_CHIPS = ['수행평가·학교 숙제', '학교 일정', '컨디션', '시간 부족', '계획이 많았어요', '집중이 안 됐어요'];
+
+// 그 날 다 못 끝냈고 아직 다른 날로 넘기지 않은 과제
+export function unfinishedTasks(week, date) {
+  return tasksOn(week, date).filter((t) => t.status !== 'done' && !t.carriedTo);
+}
+
+// 남은 분량을 다른 날로 옮길 새 과제 (원래 과제는 carriedTo로 표시)
+export function carriedCopy(t, order = Date.now()) {
+  const done = t.status === 'partial' ? t.progress : 0;
+  return {
+    date: '',
+    period: t.period || '',
+    time: t.time || '',
+    subject: t.subject || '',
+    title: t.title.startsWith('[이월') ? t.title : `[이월] ${t.title}`,
+    status: 'todo',
+    progress: 0,
+    note: done ? `${dayInfo(t.date).md} ${done}% 진행${t.note ? ` · ${t.note}` : ''}` : '',
+    order,
+    by: 'student',
+    from: t.date,
+  };
+}
+
+// 마감할 때 넘길 날짜: 오늘(또는 미래) 계획이면 다음 날, 지난 날이면 오늘로
+export function carryTarget(date, today) {
+  return date < today ? today : addDays(date, 1);
+}
+
+export function reasonText(chips, text) {
+  return [...(chips || []), String(text || '').trim()].filter(Boolean).join(' · ').slice(0, 300);
+}
+
+// 오늘보다 앞선 날 중에 정리 안 한(마감 안 한) 미완료 과제가 남은 가장 최근 날
+export function pendingCloseDate(week, today) {
+  const dates = weekDates(week.start).filter((d) => d < today).reverse();
+  return dates.find((d) => unfinishedTasks(week, d).length && !week.days?.[d]?.closedAt) || '';
+}
+
 // ---------- 카톡 문구 ----------
 export function startMessage({ date, task, startedAt, focusMin, outputMin }) {
   const what = task ? `${task.time ? `${cleanTime(task.time)} ` : ''}${taskLabel(task)}` : '오늘 계획';
@@ -258,6 +303,7 @@ export function dailyReport({ name, week, date, periods }) {
     .flatMap((g) => g.tasks.map((t) => {
       let line = `${statusIcon(t)} <${t.period}> ${t.time ? `${cleanTime(t.time)} ` : ''}${taskLabel(t)}`;
       if (t.note) line += `\n   ↳ ✏️ ${t.note}`;
+      if (t.carriedTo) line += `\n   ↳ ↪️ ${dayTitle(t.carriedTo)}로 이월`;
       return line;
     }))
     .join('\n\n');
@@ -271,6 +317,7 @@ export function dailyReport({ name, week, date, periods }) {
     '📋 [오늘의 진행 내역]',
     lines || '(오늘 계획 없음)',
     '',
+    ...(day.reason ? ['📝 [다 못 한 이유]', day.reason, ''] : []),
     '🧠 [인출 메모]',
     day.memo || '(작성한 메모 없음)',
     '',
@@ -288,7 +335,8 @@ export function parentReport({ name, parentTitle, teacherName, week, comment }) 
     if (!tasks.length) return `• ${dayTitle(date)}: 계획 없음`;
     const done = tasks.filter((t) => t.status === 'done').length;
     const partial = tasks.filter((t) => t.status === 'partial').length;
-    return `• ${dayTitle(date)}: 달성률 ${rateOf(tasks)}% (완료 ${done}건 / 부분 ${partial}건)`;
+    const reason = week.days?.[date]?.reason;
+    return `• ${dayTitle(date)}: 달성률 ${rateOf(tasks)}% (완료 ${done}건 / 부분 ${partial}건)${reason ? `\n   ↳ 못 한 이유: ${reason}` : ''}`;
   });
   const focus = focusTotal(week);
   return [
@@ -348,7 +396,7 @@ export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinish
     const prevTasks = sortTasks(taskList(prev));
     if (carryUnfinished) {
       // 과제를 그대로 복사할 때는 '진행 전' 과제가 이미 복사되므로 부분 완료만 이월 (중복 방지)
-      prevTasks.filter((t) => t.status === 'partial' || (t.status === 'todo' && !copyTasks)).forEach((t) => {
+      prevTasks.filter((t) => !t.carriedTo && (t.status === 'partial' || (t.status === 'todo' && !copyTasks))).forEach((t) => {
         add({
           date: start,
           period: t.period,

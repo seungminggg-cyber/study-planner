@@ -137,3 +137,17 @@ test('관리자 목록은 앱에서 만들 수 없다', async () => {
   await assertSucceeds(getDoc(doc(as('teacher'), 'admins/teacher')));
   await assertFails(getDoc(doc(as('stuA'), 'admins/teacher')));
 });
+
+test('폰 알림 주소는 본인 것만 저장하고, 강사는 볼 수 있다', async () => {
+  await assertSucceeds(setDoc(doc(as('stuA'), 'push/stuA'), { tokens: ['t1'], updatedAt: 1 }));
+  await assertSucceeds(updateDoc(doc(as('stuA'), 'push/stuA'), { timerEndAt: 123, timerStage: 'focus', timerLabel: '수학', updatedAt: 2 }));
+  await assertFails(setDoc(doc(as('stuA'), 'push/stuB'), { tokens: ['t2'] }));
+  await assertFails(getDoc(doc(as('stuB'), 'push/stuA')));
+  await assertSucceeds(getDoc(doc(as('teacher'), 'push/stuA')));
+  await assertSucceeds(getDocs(collection(as('teacher'), 'push')));
+  await assertFails(getDocs(collection(as('stuA'), 'push')));
+  // 정해진 칸 말고 다른 값은 못 넣음, 주소는 10개까지
+  await assertFails(setDoc(doc(as('stuA'), 'push/stuA'), { role: 'teacher' }, { merge: true }));
+  await assertFails(setDoc(doc(as('stuA'), 'push/stuA'), { tokens: Array.from({ length: 11 }, (_, i) => `t${i}`) }, { merge: true }));
+  await assertFails(setDoc(doc(anon(), 'push/stuA'), { tokens: ['x'] }));
+});

@@ -5,6 +5,7 @@ import {
   addDays, weekDates, mondayOf, weekContaining, pickInitialWeek, suggestNextStart, timeStartMinutes,
   tasksOn, groupByPeriod, rateOf, dayRate, weekRate, isLate, buildWeek, parseLegacyPlan, dailyReport,
   parentReport, startMessage, normalizeProgress, statusFromProgress, taskLabel, defaultWeekTitle,
+  unfinishedTasks, carriedCopy, carryTarget, reasonText, pendingCloseDate,
 } from '../src/lib/week.js';
 
 const sampleWeek = () => ({
@@ -154,4 +155,35 @@ test('예전 플래너 링크 가져오기', () => {
   assert.equal(y.start, '2026-12-30');
   assert.ok(y.days['2027-01-02']);
   assert.throws(() => parseLegacyPlan('아무 글자', '2026-11-03'), /읽지 못했어요/);
+});
+
+test('다 못 끝낸 과제 이월과 못 한 이유', () => {
+  const w = sampleWeek();
+  assert.deepEqual(unfinishedTasks(w, '2026-11-02').map((t) => t.id), ['c', 'b']);
+  const copy = carriedCopy({ ...w.tasks.b, id: 'b' });
+  assert.equal(copy.title, '[이월] 22강 수강');
+  assert.match(copy.note, /11\/2 60% 진행 · 절반 정리/);
+  assert.equal(copy.status, 'todo');
+  assert.equal(carriedCopy({ ...copy, title: '[이월] 22강 수강', status: 'todo', date: '2026-11-03' }).title, '[이월] 22강 수강');
+  assert.equal(carryTarget('2026-11-03', '2026-11-03'), '2026-11-04');
+  assert.equal(carryTarget('2026-11-02', '2026-11-03'), '2026-11-03');
+  assert.equal(reasonText(['시간 부족', '컨디션'], ' 수행평가 준비 '), '시간 부족 · 컨디션 · 수행평가 준비');
+  assert.equal(reasonText([], ''), '');
+  // 어제 정리 안 한 미완료가 있으면 그 날짜
+  assert.equal(pendingCloseDate(w, '2026-11-03'), '2026-11-02');
+  // 이월했거나 마감했으면 없음
+  w.tasks.b.carriedTo = '2026-11-03';
+  w.tasks.c.carriedTo = '2026-11-03';
+  assert.equal(unfinishedTasks(w, '2026-11-02').length, 0);
+  assert.equal(pendingCloseDate(w, '2026-11-03'), '');
+  // 마감 보고에 이월 표시와 이유
+  w.days['2026-11-02'].reason = '시간 부족';
+  const daily = dailyReport({ name: '민지', week: w, date: '2026-11-02', periods: ['학원전', '학원후'] });
+  assert.match(daily, /↪️ 11\/3\(화\)로 이월/);
+  assert.match(daily, /다 못 한 이유\]\n시간 부족/);
+  const parent = parentReport({ name: '민지', parentTitle: '어머님', teacherName: '승민T', week: w, comment: '' });
+  assert.match(parent, /못 한 이유: 시간 부족/);
+  // 새 주 만들 때 이미 넘긴 과제는 다시 이월하지 않음
+  const next = buildWeek({ start: '2026-11-09', prev: w, carryUnfinished: true });
+  assert.equal(Object.values(next.tasks).length, 1); // d만
 });
