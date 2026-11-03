@@ -4,8 +4,9 @@ import { html } from '../lib/html.js';
 import { toast } from '../lib/util.js';
 import { saveConfig } from '../data.js';
 import {
-  pushConfig, checkSupport, needsInstallFirst, localToken, enablePush, disablePush, pushErrorMessage,
+  pushConfig, checkSupport, needsInstallFirst, localToken, enablePush, disablePush, pushErrorMessage, requestTestPush,
 } from '../push.js';
+import { timer } from '../timer.js';
 
 let supported = null;
 checkSupport().then((ok) => {
@@ -53,7 +54,10 @@ function deviceBox(who) {
         ${on ? html`<i class="fa-solid fa-bell mr-1"></i>이 기기에서 알림을 받고 있어요` : html`<i class="fa-regular fa-bell-slash mr-1"></i>이 기기는 알림이 꺼져 있어요`}
       </p>
       ${on
-        ? html`<button type="button" class="btn btn-secondary btn-sm" data-action="push-disable">이 기기 알림 끄기</button>`
+        ? html`<span class="flex gap-1.5">
+            <button type="button" class="btn btn-primary btn-sm" data-action="push-test"><i class="fa-solid fa-paper-plane"></i>테스트 알림 보내기</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-action="push-disable">끄기</button>
+          </span>`
         : html`<button type="button" class="btn btn-primary btn-sm" data-action="push-enable" ${S.ui.busy ? 'disabled' : ''}><i class="fa-solid fa-bell"></i>${who === 'teacher' ? '이 기기에서 선생님 알림 받기' : '이 폰에서 알림 켜기'}</button>`}
     </div>`;
 }
@@ -170,6 +174,12 @@ export const pushActions = {
     await disablePush(S.user.uid);
     toast('이 기기 알림을 껐어요.');
     refresh();
+  },
+  'push-test': async () => {
+    if (timer.running) return toast('타이머가 돌아가는 중에는 테스트를 할 수 없어요. 타이머를 멈춘 뒤 눌러 주세요.', 'error');
+    if (!pushConfig(S.config).on) return toast('먼저 선생님 [설정]에서 폰 알림을 켜야 해요.', 'error');
+    await requestTestPush(S.user.uid);
+    toast('📨 테스트 알림을 요청했어요. 10분 안에 이 기기로 "알림 테스트 성공!"이 와요. 앱은 닫아도 돼요.');
   },
   'open-push-settings': () => {
     S.ui.modal = { type: 'pushSettings' };

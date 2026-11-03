@@ -104,6 +104,12 @@ export function syncTimer(uid, timer) {
   }, { merge: true }).catch((err) => console.warn('타이머 알림 저장 실패', err));
 }
 
+// 테스트 알림 요청: 다음 서버 실행(최대 10분 안)에 이 사람의 기기로 테스트 알림이 가요
+export async function requestTestPush(uid) {
+  await setDoc(doc(db, 'push', uid), { timerEndAt: Date.now(), timerStage: 'test', timerLabel: '', updatedAt: Date.now() }, { merge: true });
+  lastTimerSig = '';
+}
+
 export function pushErrorMessage(err) {
   switch (err?.code) {
     case 'push/unsupported': return '이 브라우저에서는 알림을 받을 수 없어요. 크롬(안드로이드)이나 홈 화면에 설치한 앱(아이폰)에서 켜 주세요.';

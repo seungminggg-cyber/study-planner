@@ -38,6 +38,15 @@ export function pruneSent(sent, today) {
   }));
 }
 
+// [테스트 알림 보내기]: 앱이 timerStage 'test' 와 요청 시각을 남기면 다음 실행 때 한 번 보냄
+// (보안 규칙을 바꾸지 않으려고 타이머 칸을 함께 씀)
+function isTestRequest(push, now, sent) {
+  const end = Number(push?.timerEndAt) || 0;
+  return push?.timerStage === 'test' && end && now.ms >= end && now.ms - end < 60 * 60000 && sent.timer !== end ? end : 0;
+}
+const TEST_TITLE = '✅ 알림 테스트 성공!';
+const TEST_BODY = '이 기기로 폰 알림이 잘 와요. 이제 앱을 닫아 두어도 알림을 받을 수 있어요.';
+
 function shortNames(names, max = 6) {
   return names.length > max ? `${names.slice(0, max).join(', ')} 외 ${names.length - max}명` : names.join(', ');
 }
@@ -82,8 +91,13 @@ export function planAlerts({ now, cfg, students, teachers }) {
       }
     }
 
+    const test = isTestRequest(s.push, now, sent);
     const end = Number(s.push.timerEndAt) || 0;
-    if (cfg.timer && end && now.ms >= end && now.ms - end < 60 * 60000 && sent.timer !== end) {
+    if (test) {
+      send(TEST_TITLE, TEST_BODY, 'test');
+      sent.timer = test;
+      changed = true;
+    } else if (cfg.timer && s.push.timerStage !== 'test' && end && now.ms >= end && now.ms - end < 60 * 60000 && sent.timer !== end) {
       if (s.push.timerStage === 'output') send('🏁 인출 정리까지 끝!', '오늘 완료한 만큼 계획표에 체크해 주세요.', 'timer');
       else send('🎉 집중 시간 끝!', `${s.push.timerLabel ? `${s.push.timerLabel} · ` : ''}이제 책을 덮고 배운 내용을 백지에 정리해요.`, 'timer');
       sent.timer = end;
@@ -112,6 +126,12 @@ export function planAlerts({ now, cfg, students, teachers }) {
         tag: 'tlate',
       });
       sent[key] = [...already, ...fresh.map((x) => x.s.uid)];
+      changed = true;
+    }
+    const test = isTestRequest(t.push, now, sent);
+    if (test) {
+      messages.push({ uid: t.uid, tokens, title: TEST_TITLE, body: TEST_BODY, tag: 'test' });
+      sent.timer = test;
       changed = true;
     }
     const sumKey = `sum:${now.date}`;

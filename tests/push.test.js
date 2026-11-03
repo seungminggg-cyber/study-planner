@@ -92,3 +92,16 @@ test('오래된 보낸 기록 정리', () => {
   const sent = { 'start:2026-10-28': 1, 'start:2026-11-02': 2, timer: 3 };
   assert.deepEqual(Object.keys(pruneSent(sent, '2026-11-03')).sort(), ['start:2026-11-02', 'timer']);
 });
+
+test('테스트 알림: 요청하면 다음 실행 때 한 번만 (학생·선생님 모두)', () => {
+  const req = at('17:00').ms;
+  const s = student({ week: week('17:01'), push: { tokens: ['tok1'], sent: {}, timerEndAt: req, timerStage: 'test' } });
+  const t = { uid: 'teach', push: { tokens: ['tokT'], sent: {}, timerEndAt: req, timerStage: 'test' } };
+  const r = planAlerts({ now: at('17:05'), cfg: { ...cfg, timer: false, summary: false }, students: [s], teachers: [t] });
+  assert.deepEqual(r.messages.map((m) => `${m.uid}:${m.tag}`).sort(), ['stu1:test', 'teach:test']);
+  s.push.sent = r.sent.get('stu1');
+  t.push.sent = r.sent.get('teach');
+  assert.equal(planAlerts({ now: at('17:15'), cfg, students: [s], teachers: [t] }).messages.filter((m) => m.tag === 'test').length, 0);
+  // 테스트 요청은 '타이머 끝' 알림으로 보내지 않음
+  assert.equal(r.messages.filter((m) => m.tag === 'timer').length, 0);
+});
