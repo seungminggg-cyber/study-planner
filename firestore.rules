@@ -1,0 +1,77 @@
+rules_version = '2';
+
+// 승민T 학습 플래너 - Firestore 보안 규칙
+// Firebase 콘솔 > Firestore > 규칙 탭에 이 파일 내용을 그대로 붙여넣고 [게시]하세요.
+//
+// 역할
+// - 강사(관리자): admins/{uid} 문서가 있는 계정. (콘솔에서 직접 만들어야 함)
+// - 학생: users/{uid} 문서가 있고 status 가 'approved' 인 계정.
+// - 승인 대기 학생: users/{uid} 문서는 있지만 아직 status 가 'pending'.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isTeacher() {
+      return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isApproved(uid) {
+      return isOwner(uid)
+        && get(/databases/$(database)/documents/users/$(uid)).data.status == 'approved';
+    }
+
+    function shortText(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    // 강사 계정 목록: 본인 것만 확인 가능, 앱에서는 수정 불가 (콘솔에서만 추가)
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+
+    // 앱 이름, 과목 목록, 이용 안내 (로그인 화면에도 보여야 해서 누구나 읽기 가능)
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isTeacher();
+    }
+
+    // 학생 계정 정보와 학생별 설정(루틴 시간, 구분 이름 등)
+    match /users/{uid} {
+      allow read: if isTeacher() || isOwner(uid);
+
+      // 학생은 '승인 대기' 상태로만 직접 가입 가능. 승인·설정 변경은 강사만
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'status', 'provider', 'email', 'createdAt'])
+        && request.resource.data.status == 'pending'
+        && shortText(request.resource.data.name, 20);
+      allow update, delete: if isTeacher();
+
+      // 주간 계획표 (문서 ID = 그 주 시작 날짜)
+      match /weeks/{weekId} {
+        allow read: if isTeacher() || isApproved(uid);
+        allow create, delete: if isTeacher();
+        // 학생은 과제 진행 상황(tasks)과 요일 기록(days)만 바꿀 수 있음. 제목·주간 목표는 강사만
+        allow update: if isTeacher()
+          || (isApproved(uid)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['tasks', 'days', 'updatedAt', 'studentAt'])
+              && request.resource.data.tasks is map
+              && request.resource.data.tasks.size() <= 150
+              && request.resource.data.days is map
+              && request.resource.data.days.size() <= 7);
+      }
+    }
+
+    // 강사 전용 학생 메모 (학생은 볼 수 없음)
+    match /notes/{uid} {
+      allow read, write: if isTeacher();
+    }
+  }
+}
