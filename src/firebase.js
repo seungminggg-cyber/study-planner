@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app';
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from 'firebase/app-check';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import {
   initializeFirestore, connectFirestoreEmulator, persistentLocalCache, persistentMultipleTabManager, memoryLocalCache,
@@ -20,6 +21,18 @@ const firebaseConfig = {
 export const useEmulator = import.meta.env.VITE_USE_EMULATOR === '1';
 
 export const app = initializeApp(firebaseConfig);
+
+// App Check: 우리 앱(github.io 주소)에서 온 요청인지 Google reCAPTCHA로 확인해요.
+// (키는 GitHub Actions 'Cloud setup'이 만든 공개 키. 테스트용 에뮬레이터·내 컴퓨터에서는 쓰지 않음)
+const APP_CHECK_SITE_KEY = '6Le2jg8uAAAAAEBH-vf3FUGCFToThau3cVIptQG4';
+if (!useEmulator && location.hostname.endsWith('github.io')) {
+  try {
+    initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+  } catch (err) {
+    console.warn('App Check를 켜지 못했어요', err);
+  }
+}
+
 export const auth = getAuth(app);
 
 // 오프라인 저장: 인터넷이 끊겨도 체크한 내용을 이 기기에 저장해 두었다가 연결되면 자동으로 올려요.
