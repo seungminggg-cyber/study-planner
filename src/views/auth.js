@@ -119,6 +119,10 @@ export function loginView() {
 
       ${!signup ? html`<button type="button" class="block mx-auto text-sm text-slate-500 hover:text-planner-green" data-action="reset-password">비밀번호를 잊으셨나요?</button>` : ''}
     </div>
+    <p class="text-[11px] text-slate-400 text-center leading-relaxed">
+      <button type="button" class="underline" data-action="open-privacy">개인정보 수집·이용 안내</button><br />
+      이 사이트는 reCAPTCHA로 보호되며 Google <a class="underline" href="https://policies.google.com/privacy" target="_blank" rel="noopener">개인정보처리방침</a>과 <a class="underline" href="https://policies.google.com/terms" target="_blank" rel="noopener">서비스 약관</a>이 적용돼요.
+    </p>
   `);
 }
 

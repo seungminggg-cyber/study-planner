@@ -107,3 +107,6 @@ html.dark .text-planner-green {
 .week-table td {
   border: 1.5px solid rgb(var(--p-border));
 }
+
+/* App Check(reCAPTCHA) 배지는 아래쪽 버튼을 가려서 숨김 (대신 로그인 화면에 안내 문구를 넣음) */
+.grecaptcha-badge { visibility: hidden !important; }
