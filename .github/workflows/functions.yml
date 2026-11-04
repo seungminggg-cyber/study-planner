@@ -40,10 +40,12 @@ jobs:
       - name: Firebase에 배포
         env:
           SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          # 직접 실행할 때는 바뀐 게 없어도 다시 배포 (예약·권한 설정까지 다시 맞춤)
+          ONLY: ${{ github.event_name == 'workflow_dispatch' && 'functions:default' || 'functions' }}
         run: |
           if [ -z "$SA" ]; then echo "::error::저장소 Secret FIREBASE_SERVICE_ACCOUNT 가 없어요"; exit 1; fi
           KEY="$RUNNER_TEMP/sa.json"
           trap 'rm -f "$KEY"' EXIT
           printf '%s' "$SA" > "$KEY"
           export GOOGLE_APPLICATION_CREDENTIALS="$KEY"
-          npx -y firebase-tools@15.34.0 deploy --only functions --project seungmin-planner --force --non-interactive
+          npx -y firebase-tools@15.34.0 deploy --only "$ONLY" --project seungmin-planner --force --non-interactive
