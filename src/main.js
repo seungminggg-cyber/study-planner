@@ -5,7 +5,7 @@ import { html } from './lib/html.js';
 import { toast, flushSaves } from './lib/util.js';
 import { drafts } from './lib/drafts.js';
 import {
-  loadingView, loginView, profileSetupView, pendingView, endedView, shell, authActions, authErrorMessage,
+  loadingView, loginView, profileSetupView, pendingView, endedView, shell, authActions, authErrorMessage, afterAuthRender,
 } from './views/auth.js';
 import { consentView, privacyModal, privacyActions } from './views/privacy.js';
 import { modalView, plannerActions } from './views/planner.js';
@@ -120,6 +120,8 @@ function render() {
   morphdom(root, markup, {
     onBeforeElUpdated(fromEl, toEl) {
       if (fromEl.isEqualNode(toEl)) return false;
+      // 다른 곳(구글 로그인 버튼 등)이 안을 채운 칸은 그대로 둠
+      if (fromEl.hasAttribute('data-keep') && toEl.hasAttribute('data-keep')) return false;
       if (isField(fromEl)) {
         // 지금 입력 중인 칸은 건드리지 않음 (끌고 있는 진행률 슬라이더 포함)
         if (fromEl === document.activeElement) return false;
@@ -136,6 +138,7 @@ function render() {
       return true;
     },
   });
+  if (!S.user) afterAuthRender();
   // 학생 처음 접속 시 이용 방법 안내
   if (S.role === 'student' && S.week && !S.ui.modal && !loadPref('guideSeen', false) && !guideShown) {
     guideShown = true;
