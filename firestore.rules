@@ -1,12 +1,13 @@
 rules_version = '2';
 
 // 승민T 학습 플래너 - Firestore 보안 규칙
-// Firebase 콘솔 > Firestore > 규칙 탭에 이 파일 내용을 그대로 붙여넣고 [게시]하세요.
+// main 브랜치에 올리면 GitHub Actions(functions.yml)가 테스트한 뒤 자동으로 게시해요.
 //
 // 역할
 // - 강사(관리자): admins/{uid} 문서가 있는 계정. (콘솔에서 직접 만들어야 함)
 // - 학생: users/{uid} 문서가 있고 status 가 'approved' 인 계정.
 // - 승인 대기 학생: users/{uid} 문서는 있지만 아직 status 가 'pending'.
+// - 수강 종료 학생: status 가 'ended'. 기록은 남지만 계획표는 볼 수 없음 (다시 시작하면 그대로 이어짐)
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -47,12 +48,20 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if isTeacher() || isOwner(uid);
 
-      // 학생은 '승인 대기' 상태로만 직접 가입 가능. 승인·설정 변경은 강사만
+      // 학생은 '승인 대기' 상태로, 개인정보 수집·이용에 동의해야만 직접 가입 가능. 승인·설정 변경은 강사만
       allow create: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['name', 'status', 'provider', 'email', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'status', 'provider', 'email', 'createdAt', 'consentAt', 'consentVer'])
         && request.resource.data.status == 'pending'
-        && shortText(request.resource.data.name, 20);
-      allow update, delete: if isTeacher();
+        && shortText(request.resource.data.name, 20)
+        && request.resource.data.consentAt is number
+        && shortText(request.resource.data.consentVer, 20);
+      // 학생 본인은 개인정보 동의 기록만 남길 수 있음
+      allow update: if isTeacher()
+        || (isOwner(uid)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['consentAt', 'consentVer'])
+            && request.resource.data.consentAt is number
+            && shortText(request.resource.data.consentVer, 20));
+      allow delete: if isTeacher();
 
       // 주간 계획표 (문서 ID = 그 주 시작 날짜)
       match /weeks/{weekId} {
@@ -74,8 +83,24 @@ service cloud.firestore {
       allow read, write: if isTeacher();
     }
 
+    // 강사가 자주 쓰는 과제 묶음
+    match /templates/{id} {
+      allow read, write: if isTeacher();
+    }
+
+    // 시험 D-day·수행평가 일정 (학생 본인과 강사가 함께 관리)
+    match /events/{uid} {
+      allow read: if isTeacher() || isApproved(uid);
+      allow create, update: if isTeacher()
+        || (isApproved(uid)
+            && request.resource.data.keys().hasOnly(['items', 'updatedAt'])
+            && request.resource.data.items is map
+            && request.resource.data.items.size() <= 100);
+      allow delete: if isTeacher();
+    }
+
     // 폰 알림: 기기 알림 주소(토큰)와 타이머 끝나는 시각. 본인 것만 쓰고, 강사는 몇 명이 켰는지 볼 수 있음
-    // (알림을 실제로 보내는 일은 GitHub의 서버 스크립트가 관리자 권한으로 함)
+    // (알림을 실제로 보내는 일은 Firebase Cloud Functions가 관리자 권한으로 함)
     match /push/{uid} {
       allow read: if isTeacher() || isOwner(uid);
       allow create, update: if isOwner(uid)

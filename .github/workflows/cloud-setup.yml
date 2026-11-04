@@ -1,0 +1,33 @@
+# Google Cloud 설정 맞추기 (Actions 탭에서 직접 실행). 여러 번 실행해도 안전해요.
+# - Firestore 자동 백업 (매일 7일 보관 + 매주 14주 보관)
+# - App Check 키 만들기·연결, 필요하면 Firestore에 적용
+name: Cloud setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      enforce:
+        description: "App Check 적용: 비워 두면 그대로, firestore = 적용, off = 해제"
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      - run: npm install --no-save --no-audit --no-fund google-auth-library@9.15.1
+        working-directory: scripts/cloud
+      - run: node scripts/cloud/setup.mjs
+        env:
+          ENFORCE: ${{ inputs.enforce }}

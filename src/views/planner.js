@@ -57,8 +57,8 @@ export function periodOptions(periods, selected) {
   return all.map((p) => html`<option value="${p}" ${p === selected ? 'selected' : ''}>${p}</option>`);
 }
 
-// 요일 고르는 버튼 7개
-export function dayTabs(week, selected, action) {
+// 요일 고르는 버튼 7개 (marks: 새 피드백이 있는 날짜 → 💬 표시)
+export function dayTabs(week, selected, action, marks = null) {
   const today = todayKey();
   return html`
     <div class="grid grid-cols-7 gap-1.5 sm:gap-2">
@@ -72,6 +72,7 @@ export function dayTabs(week, selected, action) {
           <button type="button" data-action="${action}" data-date="${date}"
             class="relative rounded-2xl border p-1.5 sm:p-2.5 text-left transition flex flex-col gap-1.5 ${on ? 'bg-planner-green text-white border-planner-dark shadow-md' : 'bg-planner-surface hover:bg-planner-light text-slate-800 border-planner-border/30'}">
             ${date === today ? html`<span class="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-1.5 text-[10px] font-black text-slate-900 leading-4">오늘</span>` : ''}
+            ${marks?.has(date) ? html`<span class="absolute -top-2 -right-1 rounded-full bg-sky-500 px-1 text-[10px] leading-4 shadow" title="새 피드백">💬</span>` : ''}
             <span class="flex items-baseline justify-between gap-1">
               <span class="text-xs sm:text-sm font-black">${info.ko}</span>
               <span class="text-[10px] sm:text-[11px] font-bold ${on ? 'text-white/80' : 'text-slate-400'}">${info.md}</span>

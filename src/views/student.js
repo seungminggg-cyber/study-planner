@@ -9,9 +9,10 @@ import {
   weekDates, dayTitle, tasksOn, groupByPeriod, rateOf, weekRate, startedDays, plannedDays, focusTotal,
   todayKey, nowHHMM, isLate, startMessage, dailyReport, normalizeProgress, statusFromProgress, taskLabel,
   cleanTime, makeTaskId, addDays, weekRangeText, weekContaining, unfinishedTasks, carriedCopy, carryTarget,
-  reasonText, pendingCloseDate, REASON_CHIPS,
+  reasonText, pendingCloseDate, REASON_CHIPS, unseenFeedbackDates, feedbackList,
 } from '../lib/week.js';
-import { patchWeek, taskPatch, deleteTaskPatch, weekRef } from '../data.js';
+import { eventsPanel, ddayStripView } from './events.js';
+import { patchWeek, taskPatch, deleteTaskPatch, weekRef, settle } from '../data.js';
 import {
   subjectChip, statusChip, progressBar, dayTabs, weekTable, goalsBox, openShare, rateText,
   subjectOptions, periodOptions,
@@ -28,9 +29,9 @@ const isPreview = () => S.role === 'teacher';
 export function ctx() {
   if (isPreview()) {
     const u = S.t.users.find((x) => x.id === S.ui.sel);
-    return { uid: u?.id, profile: u, week: S.t.week, weekId: S.t.weekId, readOnly: true };
+    return { uid: u?.id, profile: u, week: S.t.week, weekId: S.t.weekId, events: S.t.events, readOnly: true };
   }
-  return { uid: S.user?.uid, profile: S.profile, week: S.week, weekId: S.weekId, readOnly: false };
+  return { uid: S.user?.uid, profile: S.profile, week: S.week, weekId: S.weekId, events: S.events, readOnly: false };
 }
 
 function viewDate(c = ctx()) {
@@ -59,6 +60,33 @@ function findTask(id) {
   return week?.tasks?.[id] ? { ...week.tasks[id], id } : null;
 }
 
+// ---------- 선생님 피드백: 학생이 본 시각 (이 기기에 기억) ----------
+function fbSeen(uid) {
+  return loadPref(`fbSeen:${uid}`, {});
+}
+
+function markFeedbackSeen(c, date) {
+  if (c.readOnly) return;
+  const latest = feedbackList(c.week).filter((f) => f.date === date).reduce((m, f) => Math.max(m, f.at), 0);
+  const seen = fbSeen(c.uid);
+  if (!latest || latest <= (Number(seen[date]) || 0)) return;
+  // 화면에 한 번 보여 준 뒤 '봤음'으로 기억 (다음에 그릴 때 '새 피드백' 표시가 사라짐)
+  setTimeout(() => savePref(`fbSeen:${c.uid}`, { ...fbSeen(c.uid), [date]: latest }), 0);
+}
+
+// 지금 보고 있는 날은 화면에 바로 보이니 빼고 알려 줌
+function feedbackBanner(c, unseen) {
+  if (c.readOnly) return '';
+  const dates = unseen;
+  if (!dates.length) return '';
+  return html`
+    <div class="rounded-2xl bg-sky-50 border-2 border-sky-300 p-3.5 flex flex-wrap items-center gap-2">
+      <span class="text-xl">💬</span>
+      <span class="flex-1 min-w-[10rem] text-sm font-black text-sky-900">선생님 피드백이 새로 왔어요</span>
+      ${dates.map((d) => html`<button type="button" class="btn btn-sm bg-sky-600 text-white hover:bg-sky-700" data-action="pick-day" data-date="${d}" data-view="today">${dayTitle(d)} 보기</button>`)}
+    </div>`;
+}
+
 // ---------- 화면 ----------
 export function studentView() {
   const c = ctx();
@@ -67,29 +95,37 @@ export function studentView() {
   }
   if (!c.week) {
     return html`
+      ${ddayStripView(c.events, 'noop')}
       <div class="empty space-y-2 py-12">
         <div class="text-4xl">📒</div>
         <p class="font-bold text-slate-700">아직 이번 주 계획표가 없어요</p>
         <p>선생님이 계획표를 만들면 여기에 바로 나타나요.</p>
-      </div>`;
+      </div>
+      ${c.readOnly ? '' : eventsPanel(c.events, true)}`;
   }
   const week = c.week;
   const date = viewDate(c);
   const settings = settingsOf(c.profile);
   if (!c.readOnly) setDurations(settings.focusMin, settings.outputMin);
   const view = S.ui.sview || 'today';
+  const unseen = c.readOnly ? [] : unseenFeedbackDates(week, fbSeen(c.uid)).filter((d) => !(view === 'today' && d === date));
 
   return html`
     ${lateBanner(week)}
     ${pendingBanner(week)}
+    ${feedbackBanner(c, unseen)}
+    ${view !== 'events' ? ddayStripView(c.events) : ''}
     ${weekHeader(c)}
-    <div class="seg max-w-lg">
-      <button type="button" class="seg-btn ${view === 'today' ? 'active' : ''}" data-action="student-tab" data-tab="today"><i class="fa-solid fa-list-check"></i>계획 체크</button>
-      <button type="button" class="seg-btn ${view === 'table' ? 'active' : ''}" data-action="student-tab" data-tab="table"><i class="fa-solid fa-table-cells"></i>주간표</button>
-      <button type="button" class="seg-btn ${view === 'stats' ? 'active' : ''}" data-action="student-tab" data-tab="stats"><i class="fa-solid fa-chart-column"></i>기록</button>
+    <div class="w-full overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div class="seg w-max sm:w-auto sm:max-w-xl">
+        <button type="button" class="seg-btn ${view === 'today' ? 'active' : ''}" data-action="student-tab" data-tab="today"><i class="fa-solid fa-list-check"></i>계획 체크</button>
+        <button type="button" class="seg-btn ${view === 'table' ? 'active' : ''}" data-action="student-tab" data-tab="table"><i class="fa-solid fa-table-cells"></i>주간표</button>
+        <button type="button" class="seg-btn ${view === 'events' ? 'active' : ''}" data-action="student-tab" data-tab="events"><i class="fa-solid fa-calendar-days"></i>일정</button>
+        <button type="button" class="seg-btn ${view === 'stats' ? 'active' : ''}" data-action="student-tab" data-tab="stats"><i class="fa-solid fa-chart-column"></i>기록</button>
+      </div>
     </div>
-    ${view === 'stats' ? statsView(c) : html`
-      ${dayTabs(week, date, 'pick-day')}
+    ${view === 'stats' ? statsView(c) : view === 'events' ? eventsPanel(c.events, !c.readOnly) : html`
+      ${dayTabs(week, date, 'pick-day', new Set(unseen))}
       ${view === 'table' ? weekTable(week, settings.periods, 'table-pick') : dayView(c, date, settings)}`}
     ${c.readOnly ? '' : miniTimer()}
   `;
@@ -179,10 +215,16 @@ function dayView(c, date, settings) {
   const rate = rateOf(tasks);
   const isToday = date === todayKey();
   const groups = groupByPeriod(tasks, settings.periods);
+  markFeedbackSeen(c, date);
 
   return html`
     <div class="grid lg:grid-cols-12 gap-5 items-start">
       <div class="lg:col-span-8 space-y-4">
+        ${day.fb ? html`
+          <section class="rounded-2xl bg-sky-50 border-2 border-sky-200 p-3.5 space-y-1">
+            <p class="text-xs font-black text-sky-800">💬 선생님 한마디</p>
+            <p class="text-sm font-bold text-slate-800 whitespace-pre-wrap leading-relaxed">${day.fb}</p>
+          </section>` : ''}
         <section class="card space-y-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -237,6 +279,7 @@ function taskCard(c, t) {
       </div>
       <h5 class="mt-2 text-[15px] sm:text-base font-black leading-snug ${isDone ? 'line-through text-slate-400' : 'text-slate-900'}">${t.title}</h5>
       ${t.note && !open ? html`<p class="mt-2 text-sm font-semibold text-amber-900 bg-amber-100/70 border border-amber-300/70 rounded-xl px-3 py-2"><i class="fa-solid fa-pen-to-square mr-1 text-amber-700"></i>${t.note}</p>` : ''}
+      ${t.fb ? html`<p class="mt-2 text-sm font-semibold text-sky-900 bg-sky-50 border border-sky-200 rounded-xl px-3 py-2"><span class="font-black">💬 선생님:</span> ${t.fb}</p>` : ''}
 
       <div class="mt-3 grid grid-cols-3 gap-2">
         ${isDone ? html`
@@ -493,7 +536,7 @@ async function carryTasks(tasks, target, dayPatch = {}) {
   const batch = writeBatch(db);
   batch.update(weekRef(c.uid, c.weekId), { ...here, updatedAt: now, studentAt: now });
   if (Object.keys(there).length) batch.update(weekRef(c.uid, targetWeek), { ...there, updatedAt: now, studentAt: now });
-  await batch.commit();
+  await settle(batch.commit());
 }
 
 async function startTask(id) {
@@ -528,6 +571,7 @@ export const studentActions = {
     flushSaves();
     setViewDate(el.dataset.date);
     S.ui.openTask = '';
+    if (el.dataset.view) S.ui.sview = el.dataset.view;
     refresh();
   },
   'table-pick': (el) => {

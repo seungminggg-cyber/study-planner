@@ -112,12 +112,56 @@ test('학생은 승인 상태와 설정을 바꿀 수 없다', async () => {
   await assertFails(updateDoc(doc(as('wait'), 'users/wait'), { status: 'approved' }));
 });
 
-test('새 학생은 승인 대기로만 가입할 수 있다', async () => {
-  const base = { name: '최신입', provider: 'google', email: 'a@b.c', createdAt: 1 };
+test('새 학생은 개인정보에 동의하고 승인 대기로만 가입할 수 있다', async () => {
+  const base = { name: '최신입', provider: 'google', email: 'a@b.c', createdAt: 1, consentAt: 1, consentVer: '2026-11-04' };
   await assertFails(setDoc(doc(as('newbie'), 'users/newbie'), { ...base, status: 'approved' }));
   await assertFails(setDoc(doc(as('newbie'), 'users/other'), { ...base, status: 'pending' }));
   await assertFails(setDoc(doc(as('newbie'), 'users/newbie'), { ...base, status: 'pending', focusMin: 1 }));
+  const { consentAt, consentVer, ...noConsent } = base;
+  await assertFails(setDoc(doc(as('newbie'), 'users/newbie'), { ...noConsent, status: 'pending' }));
   await assertSucceeds(setDoc(doc(as('newbie'), 'users/newbie'), { ...base, status: 'pending' }));
+});
+
+test('학생 본인은 개인정보 동의 기록만 남길 수 있다', async () => {
+  await assertSucceeds(updateDoc(doc(as('stuA'), 'users/stuA'), { consentAt: 5, consentVer: '2026-11-04' }));
+  await assertFails(updateDoc(doc(as('stuA'), 'users/stuA'), { consentAt: 6, name: '바꿈' }));
+  await assertFails(updateDoc(doc(as('wait'), 'users/wait'), { consentAt: 6, status: 'approved' }));
+  await assertFails(updateDoc(doc(as('stuA'), 'users/stuA'), { consentAt: 'x', consentVer: '2026-11-04' }));
+  await assertFails(updateDoc(doc(as('stuB'), 'users/stuA'), { consentAt: 7, consentVer: '2026-11-04' }));
+  await assertFails(deleteDoc(doc(as('stuA'), 'users/stuA')));
+});
+
+test('수강 종료한 학생은 계획표와 일정을 볼 수 없다', async () => {
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await updateDoc(doc(db, 'users/stuB'), { status: 'ended', endedAt: 1 });
+    await setDoc(doc(db, 'events/stuB'), { items: {} });
+  });
+  await assertFails(getDoc(doc(as('stuB'), 'users/stuB/weeks/2026-11-02')));
+  await assertFails(getDoc(doc(as('stuB'), 'events/stuB')));
+  await assertSucceeds(getDoc(doc(as('stuB'), 'users/stuB')));
+});
+
+test('과제 묶음은 강사만 보고 만들 수 있다', async () => {
+  await assertSucceeds(setDoc(doc(as('teacher'), 'templates/b1'), { name: '평일 기본', tasks: [] }));
+  await assertSucceeds(getDocs(collection(as('teacher'), 'templates')));
+  await assertFails(getDocs(collection(as('stuA'), 'templates')));
+  await assertFails(setDoc(doc(as('stuA'), 'templates/b2'), { name: '해킹', tasks: [] }));
+});
+
+test('시험·수행평가 일정은 학생 본인과 강사만', async () => {
+  const item = { kind: 'perf', title: '화학 보고서', date: '2026-11-10', subject: '화학', done: false, by: 'student', createdAt: 1 };
+  await assertSucceeds(setDoc(doc(as('stuA'), 'events/stuA'), { items: { e1: item }, updatedAt: 1 }));
+  await assertSucceeds(updateDoc(doc(as('stuA'), 'events/stuA'), { 'items.e1.done': true, updatedAt: 2 }));
+  await assertSucceeds(getDoc(doc(as('teacher'), 'events/stuA')));
+  await assertSucceeds(updateDoc(doc(as('teacher'), 'events/stuA'), { 'items.e2': { ...item, kind: 'exam', by: 'teacher' } }));
+  await assertFails(getDoc(doc(as('stuB'), 'events/stuA')));
+  await assertFails(setDoc(doc(as('stuB'), 'events/stuA'), { items: {} }));
+  await assertFails(setDoc(doc(as('wait'), 'events/wait'), { items: {} }));
+  await assertFails(updateDoc(doc(as('stuA'), 'events/stuA'), { owner: 'x' }));
+  await assertFails(deleteDoc(doc(as('stuA'), 'events/stuA')));
+  const many = Object.fromEntries(Array.from({ length: 101 }, (_, i) => [`e${i}`, item]));
+  await assertFails(setDoc(doc(as('stuA'), 'events/stuA'), { items: many }));
 });
 
 test('강사는 모든 학생을 관리할 수 있다', async () => {

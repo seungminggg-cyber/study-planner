@@ -105,3 +105,57 @@ test('테스트 알림: 요청하면 다음 실행 때 한 번만 (학생·선�
   // 테스트 요청은 '타이머 끝' 알림으로 보내지 않음
   assert.equal(r.messages.filter((m) => m.tag === 'timer').length, 0);
 });
+
+test('선생님 피드백: 쓰고 2분 지나면 한 번만', () => {
+  const now = at('20:00');
+  const w = week();
+  w.tasks.b.fb = '인강 필기 꼼꼼히!';
+  w.tasks.b.fbAt = now.ms - 60 * 1000; // 1분 전: 아직 쓰는 중일 수 있음
+  let r = planAlerts({ now, cfg, students: [student({ week: w })], teachers: [] });
+  assert.equal(r.messages.filter((m) => m.tag === 'feedback').length, 0);
+  w.tasks.b.fbAt = now.ms - 3 * 60 * 1000;
+  r = planAlerts({ now, cfg, students: [student({ week: w })], teachers: [] });
+  const fb = r.messages.find((m) => m.tag === 'feedback');
+  assert.ok(fb);
+  assert.match(fb.body, /인강 필기 꼼꼼히/);
+  // 보낸 기록이 있으면 다시 안 보냄
+  const again = planAlerts({ now, cfg, students: [student({ week: w, push: { tokens: ['tok1'], sent: r.sent.get('stu1') } })], teachers: [] });
+  assert.equal(again.messages.filter((m) => m.tag === 'feedback').length, 0);
+  // 꺼 두면 안 보냄
+  const off = planAlerts({ now, cfg: { ...cfg, feedback: false }, students: [student({ week: w })], teachers: [] });
+  assert.equal(off.messages.filter((m) => m.tag === 'feedback').length, 0);
+});
+
+test('시험·수행평가 마감 알림: 학생과 선생님에게 하루 한 번', () => {
+  const now = at('19:05');
+  const events = { e1: { kind: 'perf', title: '화학 보고서', date: '2026-11-04' }, e2: { kind: 'exam', title: '기말고사', date: '2026-11-20' } };
+  const r = planAlerts({ now, cfg, students: [student({ events })], teachers: [teacher()] });
+  const mine = r.messages.find((m) => m.uid === 'stu1' && m.tag === 'deadline');
+  assert.ok(mine);
+  assert.match(mine.body, /D-1 수행평가 화학 보고서/);
+  const t = r.messages.find((m) => m.uid === 'teach' && m.tag === 'deadline');
+  assert.match(t.body, /민지 D-1 화학 보고서/);
+  // 일정 문서를 안 읽은 시간에는 아무것도 안 함
+  const r2 = planAlerts({ now: at('20:05'), cfg, students: [student()], teachers: [teacher()] });
+  assert.equal(r2.messages.filter((m) => m.tag === 'deadline').length, 0);
+  // 같은 날 두 번 안 보냄
+  const r3 = planAlerts({ now, cfg, students: [student({ events, push: { tokens: ['tok1'], sent: r.sent.get('stu1') } })], teachers: [teacher(r.sent.get('teach'))] });
+  assert.equal(r3.messages.filter((m) => m.tag === 'deadline').length, 0);
+});
+
+test('다음 주 계획표가 없는 학생을 선생님에게 (하루 요약 시각에)', () => {
+  // 11/6(금): 11/2 주만 있으면 월요일이 빔
+  const fri = { date: '2026-11-06', hhmm: '23:05', ms: Date.parse('2026-11-06T23:05:00+09:00') };
+  const s1 = student({ weekIds: ['2026-11-02'], week: null });
+  const s2 = { ...student({ uid: 'stu2', name: '서준', weekIds: ['2026-11-02', '2026-11-09'], week: null }) };
+  const r = planAlerts({ now: fri, cfg, students: [s1, s2], teachers: [teacher()] });
+  const nw = r.messages.find((m) => m.tag === 'nextweek');
+  assert.ok(nw);
+  assert.match(nw.body, /민지/);
+  assert.doesNotMatch(nw.body, /서준/);
+  const again = planAlerts({ now: fri, cfg, students: [s1, s2], teachers: [teacher(r.sent.get('teach'))] });
+  assert.equal(again.messages.filter((m) => m.tag === 'nextweek').length, 0);
+  // 수요일에는 안 보냄
+  const wed = { date: '2026-11-04', hhmm: '23:05', ms: Date.parse('2026-11-04T23:05:00+09:00') };
+  assert.equal(planAlerts({ now: wed, cfg, students: [s1], teachers: [teacher()] }).messages.filter((m) => m.tag === 'nextweek').length, 0);
+});

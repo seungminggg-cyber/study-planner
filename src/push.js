@@ -20,7 +20,11 @@ export const PUSH_DEFAULTS = {
   teacherLate: true, // 30분 넘게 늦은 학생 알림 (선생님)
   summary: true, // 하루 요약 (선생님)
   summaryTime: '23:00',
+  feedback: true, // 선생님 피드백 도착 (학생)
+  deadline: true, // 시험·수행평가 D-3·D-1·당일 (학생·선생님)
+  nextWeek: true, // 다음 주 계획표 없는 학생 (선생님)
 };
+// (서버 쪽 기본값은 scripts/push/plan.mjs 의 PUSH_DEFAULTS — 둘을 같게 맞춰 두세요)
 
 export function pushConfig(config) {
   return { ...PUSH_DEFAULTS, ...(config?.push || {}) };

@@ -6,7 +6,7 @@
 //   dry: true면 실제로 보내지는 않고 기록만 남김 (에뮬레이터 테스트용)
 import { FieldValue } from 'firebase-admin/firestore';
 import { weekContaining } from '../../src/lib/week.js';
-import { PUSH_DEFAULTS, kstNow, isQuietHour, planAlerts } from './plan.mjs';
+import { PUSH_DEFAULTS, kstNow, isQuietHour, planAlerts, isDeadlineWindow } from './plan.mjs';
 
 const DEAD_TOKEN = ['messaging/registration-token-not-registered', 'messaging/invalid-registration-token', 'messaging/invalid-argument'];
 
@@ -52,13 +52,14 @@ export async function runOnce({ db, messaging, nowMs = Date.now(), dry = false, 
     const adminsSnap = await db.collection('admins').get();
     const teacherIds = new Set(adminsSnap.docs.map((d) => d.id));
     const teachers = [...teacherIds].map((uid) => ({ uid, push: pushBy.get(uid) || null }));
-    const teacherWants = teachers.some((t) => t.push?.tokens?.length) && (cfg.teacherLate || cfg.summary);
+    const teacherOn = teachers.some((t) => t.push?.tokens?.length);
+    const teacherWants = teacherOn && (cfg.teacherLate || cfg.summary);
 
     const usersSnap = await db.collection('users').where('status', '==', 'approved').get();
     const students = usersSnap.docs.map((d) => ({ uid: d.id, name: d.data().name || '', weekIds: d.data().weekIds || [], push: pushBy.get(d.id) || null }));
 
     // 이번 주 계획표는 필요한 학생 것만 읽음
-    const need = students.filter((s) => teacherWants || (s.push?.tokens?.length && (cfg.start || cfg.late)));
+    const need = students.filter((s) => teacherWants || (s.push?.tokens?.length && (cfg.start || cfg.late || cfg.feedback)));
     const refs = [];
     need.forEach((s) => {
       s.weekId = weekContaining(s.weekIds, now.date);
@@ -67,6 +68,14 @@ export async function runOnce({ db, messaging, nowMs = Date.now(), dry = false, 
     const weekSnaps = refs.length ? await db.getAll(...refs) : [];
     const weekBy = new Map(weekSnaps.filter((w) => w.exists).map((w) => [w.ref.parent.parent.id, { ...w.data(), start: w.id }]));
     students.forEach((s) => { s.week = weekBy.get(s.uid) || null; });
+
+    // 시험·수행평가 일정은 마감 알림 시간(저녁 7시쯤)에만 읽음
+    if (cfg.deadline && isDeadlineWindow(now)) {
+      const want = students.filter((s) => teacherOn || s.push?.tokens?.length);
+      const evSnaps = want.length ? await db.getAll(...want.map((s) => db.doc(`events/${s.uid}`))) : [];
+      const evBy = new Map(evSnaps.filter((e) => e.exists).map((e) => [e.id, e.data().items || {}]));
+      want.forEach((s) => { s.events = evBy.get(s.uid) || {}; });
+    }
 
     const { messages, sent } = planAlerts({ now, cfg, students, teachers });
 

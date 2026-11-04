@@ -1,5 +1,7 @@
 // 누구에게 어떤 알림을 보낼지 정하는 계산 (Firebase와 상관없는 순수 함수 → tests/push.test.js 로 검사)
-import { tasksOn, rateOf, daysBetween } from '../../src/lib/week.js';
+import {
+  tasksOn, rateOf, daysBetween, missingSoon, feedbackList, deadlineAlerts, ddayText, dayTitle, EVENT_KINDS,
+} from '../../src/lib/week.js';
 
 export const PUSH_DEFAULTS = {
   on: false,
@@ -9,7 +11,15 @@ export const PUSH_DEFAULTS = {
   teacherLate: true,
   summary: true,
   summaryTime: '23:00',
+  feedback: true, // 학생: 선생님 피드백이 새로 오면
+  deadline: true, // 학생·선생님: 시험·수행평가 D-3, D-1, 당일 (저녁 7시)
+  nextWeek: true, // 선생님: 다음 주 계획표가 없는 학생 (금·토·일, 하루 요약 시각)
 };
+
+// 시험·수행평가 마감 알림은 하루 한 번 저녁 7시쯤 (이때만 일정 문서를 읽어서 사용량을 아낌)
+export function isDeadlineWindow(now) {
+  return now.hhmm >= '19:00' && now.hhmm < '19:15';
+}
 
 // 한국 시간 기준 날짜·시각
 export function kstNow(ms = Date.now()) {
@@ -52,7 +62,7 @@ function shortNames(names, max = 6) {
 }
 
 /**
- * students: [{ uid, name, week (이번 주 문서 또는 null), push ({ tokens, sent, timerEndAt, timerStage, timerLabel } 또는 null) }]
+ * students: [{ uid, name, weekIds, week (이번 주 문서 또는 null), events (일정 items, 마감 알림 시간에만), push ({ tokens, sent, timerEndAt, timerStage, timerLabel } 또는 null) }]
  * teachers: [{ uid, push }]
  * 결과: messages [{ uid, tokens, title, body, tag }], sent: Map(uid → 새 sent 기록)
  */
@@ -103,6 +113,28 @@ export function planAlerts({ now, cfg, students, teachers }) {
       sent.timer = end;
       changed = true;
     }
+    // 선생님 피드백: 쓰고 2분 지난 뒤(쓰는 중에 보내지 않게), 12시간 안의 것만
+    const fb = cfg.feedback && s.week ? feedbackList(s.week)[0] : null;
+    if (fb && fb.at > (Number(sent.fb) || 0)) {
+      const age = now.ms - fb.at;
+      if (age >= 2 * 60000) {
+        if (age < 12 * 3600000) {
+          send('💬 선생님 피드백이 도착했어요', `${dayTitle(fb.date)}${fb.task ? ` · ${fb.task.title}` : ''}: ${fb.text}`.slice(0, 120), 'feedback');
+        }
+        sent.fb = fb.at;
+        changed = true;
+      }
+    }
+
+    // 시험·수행평가 마감
+    if (cfg.deadline && s.events && !sent[`dl:${now.date}`]) {
+      const list = deadlineAlerts(s.events, now.date);
+      if (list.length) {
+        send('📅 다가오는 일정', list.map((e) => `${ddayText(e.date, now.date)} ${EVENT_KINDS[e.kind] || ''} ${e.title}`.replace(/\s+/g, ' ')).join(' · ').slice(0, 150), 'deadline');
+        sent[`dl:${now.date}`] = now.ms;
+        changed = true;
+      }
+    }
     if (changed) sentOut.set(s.uid, sent);
   });
 
@@ -150,6 +182,32 @@ export function planAlerts({ now, cfg, students, teachers }) {
         });
       }
       sent[sumKey] = now.ms;
+      changed = true;
+    }
+    // 다음 주 계획표가 없는 학생 (금·토·일처럼 3일 안에 빈 날이 생길 때, 하루 요약 시각에)
+    const nwKey = `nw:${now.date}`;
+    if (cfg.nextWeek && sumSince >= 0 && sumSince < 120 && !sent[nwKey]) {
+      const missing = students.filter((s) => s.weekIds?.length && missingSoon(s.weekIds, now.date));
+      if (missing.length) {
+        messages.push({
+          uid: t.uid,
+          tokens,
+          title: '📅 다음 주 계획표를 만들어 주세요',
+          body: `${shortNames(missing.map((s) => s.name))} 학생의 다음 주 계획표가 아직 없어요.`,
+          tag: 'nextweek',
+        });
+      }
+      sent[nwKey] = now.ms;
+      changed = true;
+    }
+    // 학생들의 시험·수행평가 마감 모음
+    const dlKey = `dl:${now.date}`;
+    if (cfg.deadline && !sent[dlKey] && students.some((s) => s.events)) {
+      const items = students.flatMap((s) => deadlineAlerts(s.events, now.date).map((e) => `${s.name} ${ddayText(e.date, now.date)} ${e.title}`));
+      if (items.length) {
+        messages.push({ uid: t.uid, tokens, title: '📅 학생 일정 (D-3·D-1·당일)', body: items.join(' · ').slice(0, 180), tag: 'deadline' });
+      }
+      sent[dlKey] = now.ms;
       changed = true;
     }
     if (changed) sentOut.set(t.uid, sent);

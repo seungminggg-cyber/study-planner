@@ -1,7 +1,7 @@
 // 앱 설치와 오프라인 대비용 서비스 워커
 // 항상 인터넷에서 최신 파일을 먼저 받고, 인터넷이 끊겼을 때만 저장해 둔 파일을 보여줍니다.
 // (그래서 새 버전을 배포하면 학생들에게 바로 반영돼요)
-const CACHE = 'planner-v2';
+const CACHE = 'planner-v3';
 
 self.addEventListener('install', () => self.skipWaiting());
 

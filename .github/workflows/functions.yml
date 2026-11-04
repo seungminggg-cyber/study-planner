@@ -1,7 +1,8 @@
-# Firebase Cloud Functions(5분마다 폰 알림 보내기)를 배포합니다.
-# 알림 관련 코드가 main에 올라가면 자동으로 실행되고, Actions 탭에서 직접 실행할 수도 있어요.
-# 필요한 것: Blaze 요금제, 저장소 Secret FIREBASE_SERVICE_ACCOUNT, 그 서비스 계정에 편집자 역할
-name: Deploy Firebase functions
+# Firebase에 서버 기능(5분마다 폰 알림, 학생 기록 삭제)과 보안 규칙을 배포합니다.
+# 관련 파일이 main에 올라가면 자동으로 실행되고, Actions 탭에서 직접 실행할 수도 있어요.
+# 보안 규칙은 자동 테스트를 통과해야만 게시돼요.
+# 필요한 것: Blaze 요금제, 저장소 Secret FIREBASE_SERVICE_ACCOUNT, 그 서비스 계정에 편집자 + Cloud Run 관리자 역할
+name: Deploy Firebase (functions + rules)
 
 on:
   push:
@@ -12,6 +13,8 @@ on:
       - 'scripts/push/plan.mjs'
       - 'src/lib/week.js'
       - 'firebase.json'
+      - 'firestore.rules'
+      - 'tests/rules.test.js'
       - '.github/workflows/functions.yml'
   workflow_dispatch:
 
@@ -25,27 +28,32 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: functions/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci --no-audit --no-fund
       - name: 계산·알림 판단 검사
-        run: node --test tests/week.test.js tests/push.test.js
+        run: npm test
+      - name: 보안 규칙 검사
+        run: npx -y firebase-tools@15.34.0 emulators:exec --project demo-rules-test --only firestore "npm run test:rules"
       - run: npm ci --no-audit --no-fund
         working-directory: functions
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       - name: Firebase에 배포
         env:
-          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           # 직접 실행할 때는 바뀐 게 없어도 다시 배포 (예약·권한 설정까지 다시 맞춤)
-          ONLY: ${{ github.event_name == 'workflow_dispatch' && 'functions:default' || 'functions' }}
-        run: |
-          if [ -z "$SA" ]; then echo "::error::저장소 Secret FIREBASE_SERVICE_ACCOUNT 가 없어요"; exit 1; fi
-          KEY="$RUNNER_TEMP/sa.json"
-          trap 'rm -f "$KEY"' EXIT
-          printf '%s' "$SA" > "$KEY"
-          export GOOGLE_APPLICATION_CREDENTIALS="$KEY"
-          npx -y firebase-tools@15.34.0 deploy --only "$ONLY" --project seungmin-planner --force --non-interactive
+          ONLY: ${{ github.event_name == 'workflow_dispatch' && 'functions:default,firestore:rules' || 'functions,firestore:rules' }}
+        run: npx -y firebase-tools@15.34.0 deploy --only "$ONLY" --project seungmin-planner --force --non-interactive

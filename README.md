@@ -9,7 +9,7 @@
 
 ## 처음 한 번만 하는 설정
 
-1. **보안 규칙 붙여넣기**: Firebase 콘솔 → Firestore → 규칙 탭 → `firestore.rules` 내용 전체를 붙여넣고 [게시]
+1. **보안 규칙**: `firestore.rules`는 main에 올리면 GitHub Actions(`functions.yml`)가 테스트한 뒤 자동으로 게시해요. (처음 한 번은 Firebase 콘솔 → Firestore → 규칙 탭에 붙여넣기)
 2. **GitHub Pages 켜기**: 저장소 Settings → Pages → Source를 **GitHub Actions**로 선택
 3. **로그인 허용 주소 추가**: Firebase 콘솔 → Authentication → 설정 → 승인된 도메인 → `seungminggg-cyber.github.io` 추가
 4. **강사(관리자) 계정 등록**
@@ -48,6 +48,18 @@ Firebase가 15분 넘게 멈추면 GitHub(`scripts/push/send.mjs`)가 예비로 
 - **지난 플래너**: 학생 화면 계획표 제목 아래, 강사 [계획표] 주 선택 옆의 [지난 플래너] 버튼으로 지난 주 계획표를 골라 봐요.
 - **화면 모드**: 위쪽 해/달 버튼으로 자동(폰 설정을 따름) → 밝게 → 어둡게를 바꿔요. 기기마다 따로 기억해요.
 - **예전 플래너(Netlify)에서 옮기기**: 예전 앱 코치 화면의 [🔗 계획표 링크 복사] 주소를 [새 주 만들기] 아래 '예전 플래너에서 가져오기'에 붙여넣기
+- **개인정보 동의**: 가입할 때(그리고 이미 가입한 학생은 다음 로그인 때 한 번) 수집·이용 안내에 동의해야 써요. 안내를 바꾸면 `src/store.js`의 `CONSENT_VERSION`을 올려 다시 동의를 받아요.
+- **수강 종료·기록 삭제**: [학생] → 학생 → [설정]에서 [수강 종료](기록 보관, 다시 시작 가능) 또는 [기록 모두 삭제](계획표·일정·메모·로그인 계정까지, 이름을 입력해야 지워짐). 종료 후 1년이 지난 학생은 목록에 삭제 권장 표시.
+- **피드백**: 강사 [계획표]에서 과제마다 💬 피드백, 하루마다 💬 한마디 → 학생 화면에 말풍선과 '새 피드백' 표시, 폰 알림.
+- **계획표 빨리 만들기**: [새 주 만들기]에서 강·Day 번호 자동 올리기(Day 12~18 → 19~25), [과제 묶음]으로 자주 쓰는 과제를 여러 날에 한 번에, [이 주 과제를 다른 학생에게 복사], [이 날 과제를 다른 날에 복사]할 때 번호 하루씩 올리기.
+- **일정(D-day)**: 학생 [일정] 탭·강사 [학생] → [일정]에서 시험·수행평가를 넣으면 학생 화면 위쪽에 D-day, D-3·D-1·당일 저녁 7시 폰 알림.
+- **다음 주 계획표 알림**: 3일 안에 계획표가 비는 학생이 있으면 현황판 위쪽에 알려 주고, 하루 요약 시각에 폰 알림.
+- **오프라인**: 인터넷이 끊겨도 체크한 내용은 기기에 저장했다가 연결되면 올라가요. 로그아웃하면 기기에 남긴 기록을 지워요. ('로그인 상태 유지'를 끄면 기기에 남기지 않음)
+
+## 데이터 지키기
+
+- **자동 백업**: Actions → **Cloud setup** → Run workflow 로 Firestore 백업 일정을 만들어요. 매일(7일 보관) + 매주 일요일(14주 보관). 되돌릴 일이 생기면 Claude에게 "백업에서 복구해 줘"라고 요청하세요.
+- **App Check**: 같은 Cloud setup이 reCAPTCHA 키를 만들고 앱에 연결해요. 하루쯤 지켜본 뒤 `enforce` 칸에 `firestore`를 넣고 실행하면 우리 앱이 아닌 곳에서 오는 요청을 막아요. (`off`로 해제)
 
 ## 개발용 명령어
 
@@ -70,5 +82,7 @@ npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only fi
 - `src/timer.js` — 끝나는 시각 기준 공부 타이머 (화면이 꺼져도 정확)
 - `src/views/stats.js` — 주간·월간 그래프
 - `src/push.js`, `src/views/pushSettings.js`, `public/sw.js` — 폰 알림 켜기·끄기와 알림 띄우기
-- `functions/` — 5분마다 알림을 보내는 Firebase Cloud Functions (`.github/workflows/functions.yml`로 배포)
+- `functions/` — Firebase Cloud Functions: 5분마다 알림 보내기(`sendPush`), 학생 기록 완전 삭제(`deleteStudent`). `.github/workflows/functions.yml`이 보안 규칙과 함께 배포
+- `src/views/events.js` — 시험·수행평가 일정, `src/views/privacy.js` — 개인정보 안내·동의
+- `scripts/cloud/setup.mjs` — 백업·App Check 설정 (`.github/workflows/cloud-setup.yml`)
 - `scripts/push/` — 알림 판단(`plan.mjs`)·보내기(`run.mjs`) 공용 코드, GitHub 예비 서버(`send.mjs`, `.github/workflows/push.yml`)

@@ -5,10 +5,11 @@ import {
   setPersistence, browserLocalPersistence, browserSessionPersistence,
 } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase.js';
+import { auth, db, pendingWritesDone, clearLocalDataAndReload } from '../firebase.js';
 import { S, refresh, appTitle, teacherName, loadPref, savePref } from '../store.js';
 import { html } from '../lib/html.js';
-import { toast, copyText, isKakaoInApp, isInAppBrowser } from '../lib/util.js';
+import { toast, copyText, isKakaoInApp, isInAppBrowser, flushSaves } from '../lib/util.js';
+import { consentChecks, consentOk, consentFields } from './privacy.js';
 
 // 로그인 상태 유지: 켜면 앱을 닫았다 열어도 로그인돼 있고, 끄면 브라우저를 닫을 때 로그아웃돼요.
 // (구글 로그인 창이 차단되지 않도록 로그인 버튼을 누르기 전에 미리 적용해 둡니다)
@@ -30,7 +31,7 @@ function rememberEmail(email) {
   savePref('savedEmail', loginPrefs.saveEmail ? email : '');
 }
 
-function shell(content) {
+export function shell(content) {
   return html`
     <div class="min-h-screen flex items-center justify-center px-4 py-10">
       <div class="w-full max-w-sm space-y-6">
@@ -133,6 +134,7 @@ export function profileSetupView() {
           <label class="label" for="pf-name">이름</label>
           <input class="input" id="pf-name" name="name" maxlength="20" placeholder="실명을 입력하세요" required />
         </div>
+        ${consentChecks()}
         <button class="btn btn-primary w-full py-3" ${S.ui.busy ? 'disabled' : ''}>가입 신청하기</button>
       </form>
       <p class="text-xs text-slate-400 text-center">${S.user?.email || ''} 계정으로 로그인됨 · <button type="button" class="underline hover:text-slate-600" data-action="logout">로그아웃</button></p>
@@ -163,6 +165,21 @@ export function pendingView() {
       </div>
       <div class="rounded-xl bg-slate-50 p-3 text-sm">
         <span class="font-semibold">${S.profile?.name}</span>
+      </div>
+      <button type="button" class="btn btn-ghost w-full" data-action="logout">로그아웃</button>
+    </div>
+  `);
+}
+
+export function endedView() {
+  return shell(html`
+    <div class="card space-y-4 text-center">
+      <div class="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xl">
+        <i class="fa-solid fa-box-archive"></i>
+      </div>
+      <div>
+        <h2 class="text-lg font-bold">수강이 끝났어요</h2>
+        <p class="text-sm text-slate-500 mt-1">그동안 수고 많았어요!<br />다시 시작하려면 ${teacherName()}에게 말씀해 주세요. 기록은 그대로 이어져요.</p>
       </div>
       <button type="button" class="btn btn-ghost w-full" data-action="logout">로그아웃</button>
     </div>
@@ -253,6 +270,7 @@ export const authActions = {
   'create-profile': (form, e, data) => withBusy(async () => {
     const name = String(data.get('name')).trim();
     if (!name) return toast('이름을 입력해 주세요.', 'error');
+    if (!consentOk(data)) return toast('개인정보 안내에 동의해야 가입할 수 있어요.', 'error');
     const user = auth.currentUser;
     await setDoc(doc(db, 'users', user.uid), {
       name,
@@ -260,11 +278,15 @@ export const authActions = {
       provider: user.providerData[0]?.providerId === 'google.com' ? 'google' : 'password',
       email: user.email || '',
       createdAt: Date.now(),
+      ...consentFields(),
     });
   }),
   logout: async () => {
+    flushSaves();
+    if (!(await pendingWritesDone()) && !confirm('아직 서버에 올라가지 않은 기록이 있어요. 인터넷이 연결되면 자동으로 올라가는데, 지금 로그아웃하면 사라질 수 있어요. 그래도 로그아웃할까요?')) return;
     S.ui.loginMode = 'login'; // 다시 들어올 때는 로그인 화면부터
     await signOut(auth);
+    await clearLocalDataAndReload();
   },
   'copy-uid': async () => {
     await copyText(S.user?.uid || '');

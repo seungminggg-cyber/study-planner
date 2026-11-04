@@ -108,12 +108,15 @@ export function pushCard() {
           ${toggleRow('start', '⏰ 공부 시작 시간 알림', '그 날 목표 시작 시각이 되었는데 아직 시작 전이면', cfg, !cfg.on)}
           ${toggleRow('late', '⏳ 30분 지나도 시작 안 하면 한 번 더', '목표 시각에서 30분이 지났는데 아직 시작 전이면', cfg, !cfg.on)}
           ${toggleRow('timer', '🎉 집중·인출 타이머 끝', '타이머를 켜 두고 앱을 닫았을 때도 끝나면 알려 줘요', cfg, !cfg.on)}
+          ${toggleRow('feedback', '💬 선생님 피드백 도착', '과제나 하루에 피드백을 남기면 2~5분 뒤에 알려 줘요', cfg, !cfg.on)}
+          ${toggleRow('deadline', '📅 시험·수행평가 D-3·D-1·당일', '저녁 7시에 다가오는 일정을 알려 줘요 (선생님에게도 모아서)', cfg, !cfg.on)}
           <p class="text-xs text-slate-500">학생 ${students.length}명 중 <b>${withDevice.length}명</b>이 폰 알림을 켰어요.${students.length > withDevice.length ? ' 학생 앱 위쪽 🔔 버튼에서 켤 수 있어요.' : ''}</p>
         </div>
         <div class="space-y-2">
           <p class="label !mb-0">선생님에게 보내는 알림</p>
           ${toggleRow('teacherLate', '⏰ 30분 넘게 늦은 학생', '학생 이름을 모아서 알려 줘요 (학생마다 하루 한 번)', cfg, !cfg.on)}
           ${toggleRow('summary', '📊 하루 요약', '시작한 학생 수, 미시작 학생, 평균 달성률', cfg, !cfg.on)}
+          ${toggleRow('nextWeek', '📅 다음 주 계획표 없는 학생', '금·토·일처럼 3일 안에 계획표가 비는 학생을 하루 요약 시각에 알려 줘요', cfg, !cfg.on)}
           <label class="flex items-center justify-between gap-2 rounded-xl border border-planner-border/25 bg-planner-surface p-3 text-sm font-bold ${!cfg.on || !cfg.summary ? 'opacity-50' : ''}">
             하루 요약 받을 시각
             <input type="time" class="input input-sm !w-auto" value="${cfg.summaryTime}" data-change="push-summary-time" ${!cfg.on || !cfg.summary ? 'disabled' : ''} />
@@ -131,6 +134,8 @@ export function studentPushModal(m, frame) {
     cfg.start && '⏰ 목표 시작 시각이 되면',
     cfg.late && '⏳ 30분이 지나도 시작 전이면 한 번 더',
     cfg.timer && '🎉 집중·인출 타이머가 끝나면',
+    cfg.feedback && '💬 선생님 피드백이 오면',
+    cfg.deadline && '📅 시험·수행평가 D-3·D-1·당일 저녁',
   ].filter(Boolean);
   return frame('🔔 폰 알림', html`
     ${cfg.on ? html`

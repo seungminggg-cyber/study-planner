@@ -1,18 +1,20 @@
 import './style.css';
 import morphdom from 'morphdom';
-import { S, onRender, refresh, ensureWatches, appTitle, teacherName, loadPref, savePref } from './store.js';
+import { S, onRender, refresh, ensureWatches, appTitle, teacherName, loadPref, savePref, needsConsent } from './store.js';
 import { html } from './lib/html.js';
 import { toast, flushSaves } from './lib/util.js';
 import { drafts } from './lib/drafts.js';
 import {
-  loadingView, loginView, profileSetupView, pendingView, authActions, authErrorMessage,
+  loadingView, loginView, profileSetupView, pendingView, endedView, shell, authActions, authErrorMessage,
 } from './views/auth.js';
+import { consentView, privacyModal, privacyActions } from './views/privacy.js';
 import { modalView, plannerActions } from './views/planner.js';
 import { studentView, studentActions, studentModals, checkStudyAlarm } from './views/student.js';
-import { teacherView, teacherActions } from './views/teacher.js';
+import { teacherView, teacherActions, teacherModals } from './views/teacher.js';
 import { statsActions } from './views/stats.js';
 import { pushActions, studentPushModal } from './views/pushSettings.js';
 import { archiveActions, archiveModal } from './views/archive.js';
+import { eventActions } from './views/events.js';
 import { syncTimer } from './push.js';
 import { THEMES, themeMode, applyTheme, cycleTheme } from './theme.js';
 import { installBanner, installActions, registerServiceWorker } from './install.js';
@@ -21,6 +23,7 @@ import { patchWeek, focusIncrementPatch } from './data.js';
 
 const actions = {
   ...authActions, ...plannerActions, ...studentActions, ...teacherActions, ...installActions, ...statsActions, ...pushActions, ...archiveActions,
+  ...privacyActions, ...eventActions,
   'theme-cycle': () => {
     const t = cycleTheme();
     toast(`화면 모드: ${THEMES[t].label}${t === 'auto' ? ' (폰·컴퓨터 설정을 따라가요)' : ''}`);
@@ -34,6 +37,16 @@ const TEACHER_TABS = [
   { id: 'students', label: '학생', icon: 'fa-users' },
   { id: 'settings', label: '설정', icon: 'fa-gear' },
 ];
+
+// 인터넷이 끊겼을 때 위쪽에 알려 줌
+function offlineBanner() {
+  if (navigator.onLine !== false) return '';
+  return html`
+    <div class="rounded-2xl bg-slate-700 text-white px-4 py-3 text-sm flex items-start gap-2.5" role="status">
+      <i class="fa-solid fa-wifi mt-0.5 opacity-70"></i>
+      <span><b>인터넷이 끊겼어요.</b> 체크한 내용은 이 기기에 저장해 두었다가 연결되면 자동으로 올라가요.</span>
+    </div>`;
+}
 
 function appShell(content) {
   const isTeacher = S.role === 'teacher';
@@ -64,7 +77,7 @@ function appShell(content) {
       </div>
     </header>
 
-    <main class="max-w-6xl mx-auto px-4 py-5 sm:py-6 ${isTeacher ? 'pb-28 md:pb-10' : 'pb-28 lg:pb-10'} space-y-5">${installBanner()}${content}</main>
+    <main class="max-w-6xl mx-auto px-4 py-5 sm:py-6 ${isTeacher ? 'pb-28 md:pb-10' : 'pb-28 lg:pb-10'} space-y-5">${offlineBanner()}${installBanner()}${content}</main>
 
     ${isTeacher ? html`
       <nav class="md:hidden fixed bottom-0 inset-x-0 z-40 bg-planner-card/95 backdrop-blur border-t border-planner-border/30 pb-[env(safe-area-inset-bottom)]">
@@ -75,16 +88,22 @@ function appShell(content) {
             </button>`)}
         </div>
       </nav>` : ''}
-    ${modalView({ ...studentModals, pushSettings: studentPushModal, archive: archiveModal })}
+    ${modals()}
   `;
+}
+
+function modals() {
+  return modalView({ ...studentModals, ...teacherModals, pushSettings: studentPushModal, archive: archiveModal, privacy: privacyModal });
 }
 
 function view() {
   if (!S.authReady) return loadingView();
-  if (!S.user) return loginView();
+  if (!S.user) return html`${loginView()}${modals()}`;
   if (!S.role) return loadingView();
-  if (S.role === 'new') return profileSetupView();
+  if (S.role === 'new') return html`${profileSetupView()}${modals()}`;
+  if ((S.role === 'student' || S.role === 'pending') && needsConsent(S.profile)) return html`${consentView(shell)}${modals()}`;
   if (S.role === 'pending') return pendingView();
+  if (S.role === 'ended') return endedView();
   return appShell(S.role === 'teacher' ? teacherView() : studentView());
 }
 
@@ -208,6 +227,11 @@ document.addEventListener('visibilitychange', () => {
   else refresh();
 });
 window.addEventListener('pagehide', flushSaves);
+window.addEventListener('online', () => {
+  toast('인터넷이 다시 연결됐어요. 저장해 둔 기록을 올리고 있어요.');
+  refresh();
+});
+window.addEventListener('offline', refresh);
 
 // ---------- 공부 타이머 ----------
 let lastSig = '';

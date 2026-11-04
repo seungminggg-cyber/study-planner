@@ -6,6 +6,8 @@ import {
   tasksOn, groupByPeriod, rateOf, dayRate, weekRate, isLate, buildWeek, parseLegacyPlan, dailyReport,
   parentReport, startMessage, normalizeProgress, statusFromProgress, taskLabel, defaultWeekTitle,
   unfinishedTasks, carriedCopy, carryTarget, reasonText, pendingCloseDate,
+  missingSoon, numberToken, bumpTitle, seriesOffsets, freshTaskCopies, feedbackList, unseenFeedbackDates,
+  ddayText, eventList, upcomingEvents, ddayStrip, deadlineAlerts,
 } from '../src/lib/week.js';
 
 const sampleWeek = () => ({
@@ -186,4 +188,102 @@ test('다 못 끝낸 과제 이월과 못 한 이유', () => {
   // 새 주 만들 때 이미 넘긴 과제는 다시 이월하지 않음
   const next = buildWeek({ start: '2026-11-09', prev: w, carryUnfinished: true });
   assert.equal(Object.values(next.tasks).length, 1); // d만
+});
+
+test('다음 주 계획표가 곧 비는지', () => {
+  // 11/2(월)~11/8(일) 계획만 있음
+  assert.equal(missingSoon(['2026-11-02'], '2026-11-04'), ''); // 수: 목~토 있음
+  assert.equal(missingSoon(['2026-11-02'], '2026-11-06'), '2026-11-09'); // 금: 월요일이 빔
+  assert.equal(missingSoon(['2026-11-02', '2026-11-09'], '2026-11-06'), '');
+  assert.equal(missingSoon([], '2026-11-06'), '2026-11-07');
+});
+
+test('강·Day 번호 올리기', () => {
+  assert.equal(bumpTitle('영단어 Day 12', 7), '영단어 Day 19');
+  assert.equal(bumpTitle('개념의 신 19강 수강 + 정리', 1), '개념의 신 20강 수강 + 정리');
+  assert.equal(bumpTitle('19~20강', 2), '21~22강');
+  assert.equal(bumpTitle('수학 3회 모의고사', 1), '수학 4회 모의고사');
+  assert.equal(bumpTitle('Unit 4 단어', 1), 'Unit 5 단어');
+  assert.equal(bumpTitle('쎈 p.30~35', 3), '쎈 p.30~35'); // 쪽수는 그대로
+  assert.equal(bumpTitle('오답노트', 3), '오답노트');
+  assert.equal(numberToken('오답노트'), null);
+  const tasks = [0, 1, 2, 3, 4, 5, 6].map((i) => ({ id: `d${i}`, subject: '영어', title: `영단어 Day ${12 + i}` }));
+  tasks.push({ id: 'k', subject: '수학', title: '개념 3강' }, { id: 'c', subject: '영어', title: '[이월] 영단어 Day 11' });
+  const off = seriesOffsets(tasks);
+  assert.equal(off.get('d0'), 7);
+  assert.equal(off.get('k'), 1);
+  assert.equal(off.has('c'), false); // 이월 과제는 번호 계산에서 빼요
+});
+
+test('새 주 만들기: 번호 자동 올리기, 학생이 이월한 과제는 복사 안 함', () => {
+  const prev = {
+    start: '2026-11-02',
+    days: {},
+    tasks: {
+      a: { date: '2026-11-02', period: '학원후', subject: '영어', title: '영단어 Day 12', status: 'done', progress: 100 },
+      b: { date: '2026-11-03', period: '학원후', subject: '영어', title: '영단어 Day 13', status: 'done', progress: 100 },
+      c: { date: '2026-11-04', period: '학원후', subject: '수학', title: '오답 정리', status: 'todo', progress: 0 },
+      d: { date: '2026-11-05', period: '학원후', subject: '영어', title: '[이월] 영단어 Day 13', status: 'todo', progress: 0, by: 'student', from: '2026-11-03' },
+    },
+  };
+  const w = buildWeek({ start: '2026-11-09', prev, copyTasks: true, bumpNumbers: true });
+  const titles = Object.values(w.tasks).map((t) => `${t.date} ${t.title}`).sort();
+  assert.deepEqual(titles, ['2026-11-09 영단어 Day 14', '2026-11-10 영단어 Day 15', '2026-11-11 오답 정리']);
+  assert.equal(w.bumped, 2);
+  const plain = buildWeek({ start: '2026-11-09', prev, copyTasks: true });
+  assert.equal(plain.bumped, undefined);
+  assert.ok(Object.values(plain.tasks).some((t) => t.title === '영단어 Day 12'));
+});
+
+test('다른 학생에게 복사할 과제: 기록은 빼고 새로', () => {
+  const week = {
+    tasks: {
+      a: { date: '2026-11-02', period: '학원후', subject: '영어', title: '단어', status: 'done', progress: 100, note: '다 함', fb: '좋아', fbAt: 5, by: 'teacher' },
+      b: { date: '2026-11-03', period: '학원후', subject: '영어', title: '[이월] 단어', status: 'todo', progress: 0, by: 'student', from: '2026-11-02' },
+    },
+  };
+  const out = Object.values(freshTaskCopies(week, 100));
+  assert.equal(out.length, 1);
+  assert.equal(out[0].status, 'todo');
+  assert.equal(out[0].note, '');
+  assert.equal(out[0].fb, undefined);
+  assert.equal(out[0].by, 'teacher');
+});
+
+test('선생님 피드백: 최신순, 안 본 날짜', () => {
+  const week = {
+    days: { '2026-11-02': { fb: '잘했어', fbAt: 300 }, '2026-11-03': { fb: '', fbAt: 0 } },
+    tasks: {
+      a: { date: '2026-11-03', title: '단어', fb: '스펠링 주의', fbAt: 500 },
+      b: { date: '2026-11-03', title: '수학', fb: '', fbAt: 0 },
+    },
+  };
+  const list = feedbackList(week);
+  assert.deepEqual(list.map((f) => f.text), ['스펠링 주의', '잘했어']);
+  assert.equal(list[0].task.title, '단어');
+  assert.deepEqual(unseenFeedbackDates(week, {}), ['2026-11-02', '2026-11-03']);
+  assert.deepEqual(unseenFeedbackDates(week, { '2026-11-02': 300 }), ['2026-11-03']);
+  assert.deepEqual(unseenFeedbackDates(week, { '2026-11-02': 300, '2026-11-03': 500 }), []);
+});
+
+test('시험 D-day·수행평가', () => {
+  const today = '2026-11-04';
+  assert.equal(ddayText('2026-11-10', today), 'D-6');
+  assert.equal(ddayText(today, today), 'D-DAY');
+  assert.equal(ddayText('2026-11-01', today), 'D+3');
+  const items = {
+    x: { kind: 'exam', title: '기말고사', date: '2026-12-08' },
+    y: { kind: 'perf', title: '화학 보고서', date: '2026-11-05', done: false },
+    z: { kind: 'perf', title: '국어 발표', date: '2026-11-07', done: true },
+    w: { kind: 'perf', title: '영어 에세이', date: '2026-11-25' },
+    old: { kind: 'perf', title: '지난 것', date: '2026-10-30' },
+    bad: { kind: 'perf', title: '', date: '2026-11-06' },
+  };
+  assert.deepEqual(eventList(items).map((e) => e.id), ['old', 'y', 'z', 'w', 'x']);
+  assert.deepEqual(upcomingEvents(items, today).map((e) => e.id), ['y', 'w', 'x']);
+  // 띠: 가장 가까운 시험 + 2주 안 수행평가 (끝낸 것 제외)
+  assert.deepEqual(ddayStrip(items, today).map((e) => e.id), ['x', 'y']);
+  // 마감 알림: D-3, D-1, 당일만
+  assert.deepEqual(deadlineAlerts(items, today).map((e) => e.id), ['y']);
+  assert.deepEqual(deadlineAlerts(items, '2026-11-22').map((e) => e.id), ['w']);
 });

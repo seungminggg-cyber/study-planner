@@ -135,6 +135,16 @@ export function suggestNextStart(weekIds, key) {
   return after < mondayOf(key) ? mondayOf(key) : after;
 }
 
+// 오늘 다음 날부터 horizon일 안에 계획표가 없는 날이 있으면 그 첫날 (없으면 '')
+// 금요일이면 토·일·월을 살펴서, 다음 주 계획표를 아직 안 만들었는지 미리 알려 줄 때 씀
+export function missingSoon(weekIds, today, horizon = 3) {
+  for (let i = 1; i <= horizon; i += 1) {
+    const d = addDays(today, i);
+    if (!weekContaining(weekIds, d)) return d;
+  }
+  return '';
+}
+
 export function nowHHMM(d = new Date()) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
@@ -358,6 +368,65 @@ export function parentReport({ name, parentTitle, teacherName, week, comment }) 
   ].join('\n');
 }
 
+// ---------- 강·Day 번호 자동으로 올리기 ----------
+// '영단어 Day 12', '개념의 신 19강', '19~20강', '3회', 'Unit 4' 처럼 번호가 있는 과제를 찾아요.
+const NUM_BEFORE = /(Day|DAY|day|Unit|UNIT|unit|Lesson|lesson|Chapter|chapter|Ch\.|제)\s*(\d{1,4})(?:\s*[~\-]\s*(\d{1,4}))?/g;
+const NUM_AFTER = /(\d{1,4})(?:\s*[~\-]\s*(\d{1,4}))?\s*(강|회차|회|차시|일차|단원|과|주차)/g;
+
+// 제목에서 마지막 번호 하나 (범위면 시작·끝)
+export function numberToken(title) {
+  const text = String(title || '');
+  let best = null;
+  for (const m of text.matchAll(NUM_BEFORE)) {
+    best = { index: m.index, len: m[0].length, start: Number(m[2]), end: Number(m[3] || m[2]), before: true };
+  }
+  for (const m of text.matchAll(NUM_AFTER)) {
+    if (!best || m.index > best.index) best = { index: m.index, len: m[0].length, start: Number(m[1]), end: Number(m[2] || m[1]), before: false };
+  }
+  if (!best) return null;
+  // 같은 과제끼리 묶을 열쇠: 번호 부분을 # 으로 바꾼 제목
+  best.key = text.slice(0, best.index) + '#' + text.slice(best.index + best.len);
+  return best;
+}
+
+// 번호를 n만큼 올린 제목
+export function bumpTitle(title, n) {
+  const tok = numberToken(title);
+  if (!tok || !n) return title;
+  const text = String(title);
+  const piece = text.slice(tok.index, tok.index + tok.len);
+  let replaced;
+  if (tok.before) {
+    replaced = piece.replace(/(\d{1,4})(\s*[~\-]\s*)?(\d{1,4})?$/, (all, a, sep, b) => `${Number(a) + n}${sep || ''}${b ? Number(b) + n : ''}`);
+  } else {
+    replaced = piece.replace(/^(\d{1,4})(\s*[~\-]\s*)?(\d{1,4})?/, (all, a, sep, b) => `${Number(a) + n}${sep || ''}${b ? Number(b) + n : ''}`);
+  }
+  return text.slice(0, tok.index) + replaced + text.slice(tok.index + tok.len);
+}
+
+// 한 주 과제들을 다음 주로 복사할 때 번호를 얼마나 올릴지 (같은 과목·같은 이름끼리)
+// 월 Day 12 ~ 일 Day 18 → 다음 주는 +7 (Day 19부터), 매주 한 번 '3강' → +1
+export function seriesOffsets(tasks) {
+  const groups = new Map();
+  tasks.forEach((t) => {
+    const tok = numberToken(t.title);
+    if (!tok || /^\[이월/.test(t.title)) return;
+    const key = `${t.subject || ''}|${tok.key}`;
+    const g = groups.get(key) || { min: Infinity, max: -Infinity };
+    g.min = Math.min(g.min, tok.start);
+    g.max = Math.max(g.max, tok.end);
+    groups.set(key, g);
+  });
+  const out = new Map();
+  tasks.forEach((t) => {
+    const tok = numberToken(t.title);
+    if (!tok || /^\[이월/.test(t.title)) return;
+    const g = groups.get(`${t.subject || ''}|${tok.key}`);
+    out.set(t.id, g.max - g.min + 1);
+  });
+  return out;
+}
+
 // ---------- 새 주 만들기 ----------
 let idCounter = 0;
 export function makeTaskId() {
@@ -372,7 +441,8 @@ function emptyDay(target) {
 // prev: 지난주 문서 (없어도 됨)
 // copyTasks: 지난주 과제를 같은 요일에 그대로 복사 / carryUnfinished: 덜 끝낸 과제를 새 주 첫날로 이월
 // (복사도 함께 하면 부분 완료 과제만 이월해서 같은 과제가 두 번 생기지 않게 함)
-export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinished = false, defaultTarget = '17:00', now = Date.now() }) {
+// bumpNumbers: 복사할 때 강·Day 번호를 자동으로 올림 (올린 과제 수는 결과의 bumped)
+export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinished = false, bumpNumbers = false, defaultTarget = '17:00', now = Date.now() }) {
   const dates = weekDates(start);
   const prevDates = prev ? weekDates(prev.start) : [];
   const days = {};
@@ -387,6 +457,7 @@ export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinish
 
   const tasks = {};
   let order = 0;
+  let bumped = 0;
   const add = (t) => {
     order += 1;
     tasks[makeTaskId()] = { ...t, status: 'todo', progress: 0, note: t.note || '', order, by: 'teacher' };
@@ -408,10 +479,15 @@ export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinish
       });
     }
     if (copyTasks) {
-      prevTasks.forEach((t) => {
+      // 다른 날에서 이월해 온 과제(학생이 넘긴 것)는 그 주에만 있던 일이라 복사하지 않음
+      const copied = prevTasks.filter((t) => !t.from);
+      const offsets = bumpNumbers ? seriesOffsets(copied) : new Map();
+      copied.forEach((t) => {
         const offset = prevDates.indexOf(t.date);
         if (offset < 0) return;
-        add({ date: dates[offset], period: t.period, time: t.time || '', subject: t.subject || '', title: t.title.replace(/^\[이월\]\s*/, '') });
+        const n = offsets.get(t.id) || 0;
+        if (n) bumped += 1;
+        add({ date: dates[offset], period: t.period, time: t.time || '', subject: t.subject || '', title: bumpTitle(t.title.replace(/^\[이월\]\s*/, ''), n) });
       });
     }
   }
@@ -424,7 +500,79 @@ export function buildWeek({ start, title, prev, copyTasks = false, carryUnfinish
     tasks,
     createdAt: now,
     updatedAt: now,
+    ...(bumpNumbers ? { bumped } : {}),
   };
+}
+
+// 다른 학생에게 복사할 과제: 진행 기록·메모·피드백은 빼고 새 과제로
+export function freshTaskCopies(week, now = Date.now()) {
+  const out = {};
+  let order = now;
+  sortTasks(taskList(week)).filter((t) => !t.from).forEach((t) => {
+    order += 1;
+    out[makeTaskId()] = {
+      date: t.date, period: t.period || '', time: t.time || '', subject: t.subject || '',
+      title: t.title.replace(/^\[이월\]\s*/, ''), status: 'todo', progress: 0, note: '', order, by: 'teacher',
+    };
+  });
+  return out;
+}
+
+// ---------- 선생님 피드백 ----------
+// 과제: tasks.{id}.fb / fbAt, 하루: days.{날짜}.fb / fbAt
+export function feedbackList(week) {
+  const list = [];
+  taskList(week).forEach((t) => {
+    if (t.fb && t.fbAt) list.push({ date: t.date, at: t.fbAt, text: t.fb, task: t });
+  });
+  Object.entries(week?.days || {}).forEach(([date, d]) => {
+    if (d?.fb && d.fbAt) list.push({ date, at: d.fbAt, text: d.fb, task: null });
+  });
+  return list.sort((a, b) => b.at - a.at);
+}
+
+// 학생이 아직 안 본 피드백이 있는 날짜들 (seen: { 날짜: 마지막으로 본 시각 })
+export function unseenFeedbackDates(week, seen = {}) {
+  const dates = new Set();
+  feedbackList(week).forEach((f) => {
+    if (f.at > (Number(seen[f.date]) || 0)) dates.add(f.date);
+  });
+  return [...dates].sort();
+}
+
+// ---------- 시험 D-day · 수행평가 ----------
+// events/{uid}.items: { id: { kind: 'exam' | 'perf', title, date, subject, done, by, createdAt } }
+export const EVENT_KINDS = { exam: '시험', perf: '수행평가' };
+
+export function ddayText(date, today) {
+  const n = daysBetween(today, date);
+  if (n === 0) return 'D-DAY';
+  return n > 0 ? `D-${n}` : `D+${-n}`;
+}
+
+export function eventList(items) {
+  return Object.entries(items || {})
+    .filter(([, e]) => e && e.title && isDateKey(e.date))
+    .map(([id, e]) => ({ ...e, id }))
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.title).localeCompare(String(b.title)));
+}
+
+// 앞으로 다가올 일정 (끝낸 수행평가는 뺌). days 안에 있는 것만
+export function upcomingEvents(items, today, days = 60) {
+  return eventList(items).filter((e) => !e.done && e.date >= today && daysBetween(today, e.date) <= days);
+}
+
+// 오늘 화면 위쪽 띠: 가장 가까운 시험 1개 + 2주 안의 수행평가
+export function ddayStrip(items, today) {
+  const list = upcomingEvents(items, today, 120);
+  const exam = list.find((e) => e.kind === 'exam');
+  const perf = list.filter((e) => e.kind !== 'exam' && daysBetween(today, e.date) <= 14);
+  return [...(exam ? [exam] : []), ...perf].slice(0, 4);
+}
+
+// 마감 알림을 보낼 일정 (D-3, D-1, 당일)
+export function deadlineAlerts(items, today) {
+  return upcomingEvents(items, today, 3).filter((e) => [0, 1, 3].includes(daysBetween(today, e.date)));
 }
 
 // ---------- 예전 플래너(Netlify) 데이터 가져오기 ----------

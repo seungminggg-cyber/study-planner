@@ -25,11 +25,12 @@ export const S = {
   user: null,
   isTeacher: false,
   profile: undefined, // undefined = 불러오는 중, null = 가입 정보 없음
-  role: '', // 'teacher' | 'student' | 'pending' | 'new'
+  role: '', // 'teacher' | 'student' | 'pending' | 'ended' | 'new'
   config: null,
   configLoaded: false,
   week: undefined, // 학생: 지금 보고 있는 주 (undefined = 불러오는 중, null = 없음)
   weekId: '',
+  events: undefined, // 학생: 시험·수행평가 일정 items
   t: {
     users: [],
     usersLoaded: false,
@@ -40,6 +41,8 @@ export const S = {
     noteLoaded: false,
     push: {}, // 설정 탭: uid → 알림 기기 정보
     pushStatus: null,
+    events: undefined, // 고른 학생의 시험·수행평가 일정 items
+    bundles: null, // 과제 묶음 목록 (묶음 팝업을 열 때 읽음)
   },
   myPush: null,
   ui: {
@@ -146,7 +149,8 @@ function updateRole() {
   if (S.isTeacher) setRole('teacher');
   else if (S.profile === undefined) setRole('');
   else if (!S.profile) setRole('new');
-  else setRole(S.profile.status === 'approved' ? 'student' : 'pending');
+  else if (S.profile.status === 'approved') setRole('student');
+  else setRole(S.profile.status === 'ended' ? 'ended' : 'pending');
 }
 
 function setRole(next) {
@@ -157,8 +161,9 @@ function setRole(next) {
   stopPrefix('e:');
   S.week = undefined;
   S.weekId = '';
+  S.events = undefined;
   stopPrefix('s:');
-  S.t = { users: [], usersLoaded: false, current: {}, week: undefined, weekId: '', note: '', noteLoaded: false, push: {}, pushStatus: null };
+  S.t = { users: [], usersLoaded: false, current: {}, week: undefined, weekId: '', note: '', noteLoaded: false, push: {}, pushStatus: null, events: undefined, bundles: null };
   S.ui.tab = next === 'teacher' ? loadPref('tTab', 'dash') : '';
   S.ui.sview = 'today';
   S.ui.date = '';
@@ -176,7 +181,14 @@ function setRole(next) {
 
 // ---------- 화면을 그리기 전에 필요한 실시간 연결 확인 ----------
 export function ensureWatches() {
-  if (S.role === 'student') watchStudentWeek();
+  if (S.role === 'student') {
+    watchStudentWeek();
+    if (!subs.has('r:events')) {
+      listen('r:events', doc(db, 'events', S.user.uid), (snap) => {
+        S.events = snap && snap.exists() ? snap.data().items || {} : {};
+      });
+    }
+  }
   if (S.role === 'teacher') {
     if (S.ui.tab === 'dash') watchDashboard();
     else stopPrefix('d:');
@@ -264,6 +276,14 @@ function watchEditor() {
       });
     }
   }
+  const evKey = `e:events:${u.id}`;
+  if (!subs.has(evKey)) {
+    stopPrefix('e:events:');
+    S.t.events = undefined;
+    listen(evKey, doc(db, 'events', u.id), (snap) => {
+      S.t.events = snap && snap.exists() ? snap.data().items || {} : {};
+    });
+  }
   const noteKey = `e:note:${u.id}`;
   if (!subs.has(noteKey)) {
     stopPrefix('e:note:');
@@ -283,6 +303,17 @@ export function approvedStudents() {
 
 export function pendingStudents() {
   return S.t.users.filter((u) => u.status === 'pending');
+}
+
+export function endedStudents() {
+  return S.t.users.filter((u) => u.status === 'ended');
+}
+
+// 개인정보 안내가 바뀌면 이 날짜를 올려서 다시 동의를 받아요
+export const CONSENT_VERSION = '2026-11-04';
+
+export function needsConsent(profile) {
+  return Boolean(profile) && profile.consentVer !== CONSENT_VERSION;
 }
 
 export function settingsOf(user) {
