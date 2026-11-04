@@ -2,7 +2,8 @@
 //
 // 동작 방식
 // 1) 학생·선생님이 [이 기기에서 알림 켜기]를 누르면, 이 기기의 알림 주소(토큰)를 push/{uid} 에 저장해요.
-// 2) GitHub에서 10분마다 scripts/push/send.mjs 가 실행돼서, 보낼 알림이 있으면 그 주소로 보내요.
+// 2) Firebase Cloud Functions(functions/index.js)가 5분마다 실행돼서, 보낼 알림이 있으면 그 주소로 보내요.
+//    (Firebase가 멈추면 GitHub의 scripts/push/send.mjs 가 예비로 대신 보내요)
 //    (시작 시간 알림, 30분 지나도 미시작, 타이머 종료, 선생님에게 늦은 학생·하루 요약)
 // 3) 폰에 도착한 알림은 public/sw.js 가 화면에 띄워요.
 import { getMessaging, getToken, deleteToken, isSupported } from 'firebase/messaging';
@@ -104,7 +105,7 @@ export function syncTimer(uid, timer) {
   }, { merge: true }).catch((err) => console.warn('타이머 알림 저장 실패', err));
 }
 
-// 테스트 알림 요청: 다음 서버 실행(최대 10분 안)에 이 사람의 기기로 테스트 알림이 가요
+// 테스트 알림 요청: 다음 서버 실행(보통 5분 안)에 이 사람의 기기로 테스트 알림이 가요
 export async function requestTestPush(uid) {
   await setDoc(doc(db, 'push', uid), { timerEndAt: Date.now(), timerStage: 'test', timerLabel: '', updatedAt: Date.now() }, { merge: true });
   lastTimerSig = '';

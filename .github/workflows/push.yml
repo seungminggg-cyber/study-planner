@@ -1,7 +1,8 @@
-# 10분마다 폰 알림을 확인해서 보냅니다. (GitHub 사정에 따라 몇 분 늦게 실행될 수 있어요)
+# 예비 알림 서버: 평소엔 Firebase(functions/)가 5분마다 보내고, 이건 Firebase가 15분 넘게 멈췄을 때만 대신 보냅니다.
+# (GitHub 사정에 따라 실제로는 수십 분마다 실행돼요)
 # 필요한 것: 저장소 Settings → Secrets and variables → Actions 에 FIREBASE_SERVICE_ACCOUNT
 # 선생님 앱 [설정]에서 폰 알림을 꺼 두면 확인만 하고 아무것도 보내지 않아요.
-name: Send phone notifications
+name: Send phone notifications (backup)
 
 on:
   schedule:

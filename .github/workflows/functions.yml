@@ -1,0 +1,49 @@
+# Firebase Cloud Functions(5분마다 폰 알림 보내기)를 배포합니다.
+# 알림 관련 코드가 main에 올라가면 자동으로 실행되고, Actions 탭에서 직접 실행할 수도 있어요.
+# 필요한 것: Blaze 요금제, 저장소 Secret FIREBASE_SERVICE_ACCOUNT, 그 서비스 계정에 편집자 역할
+name: Deploy Firebase functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'scripts/push/run.mjs'
+      - 'scripts/push/plan.mjs'
+      - 'src/lib/week.js'
+      - 'firebase.json'
+      - '.github/workflows/functions.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: functions
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: functions/package-lock.json
+      - name: 계산·알림 판단 검사
+        run: node --test tests/week.test.js tests/push.test.js
+      - run: npm ci --no-audit --no-fund
+        working-directory: functions
+      - name: Firebase에 배포
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA" ]; then echo "::error::저장소 Secret FIREBASE_SERVICE_ACCOUNT 가 없어요"; exit 1; fi
+          KEY="$RUNNER_TEMP/sa.json"
+          trap 'rm -f "$KEY"' EXIT
+          printf '%s' "$SA" > "$KEY"
+          export GOOGLE_APPLICATION_CREDENTIALS="$KEY"
+          npx -y firebase-tools@15.34.0 deploy --only functions --project seungmin-planner --force --non-interactive

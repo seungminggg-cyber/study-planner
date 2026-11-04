@@ -13,17 +13,22 @@
 
 ## 기술 구성
 - Vite + 순수 JS(프레임워크 없음) + Tailwind CSS 3(`planner` 초록 색상). 아이콘 Font Awesome, 글꼴 Pretendard (npm 번들).
-- Firebase 프로젝트 `seungmin-planner`: Authentication(Google, 이메일/비밀번호) + Firestore(서울). **무료(Spark) 요금제**.
+- Firebase 프로젝트 `seungmin-planner`: Authentication(Google, 이메일/비밀번호) + Firestore(서울) + Cloud Functions(알림). **Blaze 요금제**지만 무료 사용량 안에서 쓰는 것이 목표.
 - 배포: GitHub Pages. `main`에 push하면 `.github/workflows/deploy.yml`이 테스트·빌드·배포. 주소 https://seungminggg-cyber.github.io/study-planner/ (vite `base` = `/study-planner/`)
 - PWA: `public/manifest.webmanifest`, `public/sw.js`(network-first, push 수신·알림 표시·클릭 처리), `src/install.js`(설치 배너).
-- 폰 알림(무료 방식): 기기 토큰은 FCM(`src/push.js`, 기본 VAPID 키) → `push/{uid}`. 보내기는 Cloud Functions(유료) 대신 GitHub Actions `push.yml`이 10분마다 `scripts/push/send.mjs`(firebase-admin, 저장소 Secret `FIREBASE_SERVICE_ACCOUNT`)를 실행. 누구에게 무엇을 보낼지는 `scripts/push/plan.mjs`(순수 함수, tests/push.test.js). 새벽 2~6시(한국 시간)는 쉼. 서버는 실행할 때마다 `config/push_status`에 마지막 실행 시각을 남김.
+- 폰 알림: 기기 토큰은 FCM(`src/push.js`, 기본 VAPID 키) → `push/{uid}`. 프로젝트는 **Blaze 요금제**(2026-11부터, 알림 서버 때문).
+  - 보내기: Cloud Functions `functions/index.js`의 `sendPush`(onSchedule 5분마다, asia-northeast3). 판단은 `scripts/push/plan.mjs`(순수 함수, tests/push.test.js), 읽기·보내기·기록은 `scripts/push/run.mjs`의 `runOnce`.
+  - 배포: `.github/workflows/functions.yml`(관련 파일이 main에 올라가면 자동 + 수동 실행). `firebase.json` predeploy가 `functions/copy-shared.mjs`로 공용 파일을 `functions/shared/`에 복사(git 무시). 배포 계정은 Secret `FIREBASE_SERVICE_ACCOUNT`(편집자 + Cloud Run 관리자 역할).
+  - 예비: GitHub Actions `push.yml`(cron 10분, 실제로는 수십 분)이 `scripts/push/send.mjs` 실행. `config/push_status.runner`가 `firebase`이고 15분 안에 돌았으면 쉼.
+  - 새벽 2~6시(한국 시간)는 쉼. 실행할 때마다 `config/push_status`에 `lastRun`, `runner`, 결과를 남기고 선생님 [설정]에 보여 줌.
 
 ## 명령어
 ```bash
 npm install
 npm run build
 npm test                      # tests/week.test.js + tests/push.test.js (계산·문구·이월·예전 데이터·알림 판단)
-FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 DRY_RUN=1 PUSH_NOW_MS=<ms> node scripts/push/send.mjs   # 알림 서버를 에뮬레이터로 확인만 (scripts/push 에서 npm ci 먼저)
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 DRY_RUN=1 FORCE=1 PUSH_NOW_MS=<ms> node scripts/push/send.mjs   # 알림 서버를 에뮬레이터로 확인 (실제로 보내진 않고 기록만, scripts/push 에서 npm ci 먼저)
+cd functions && npm ci && node copy-shared.mjs   # Cloud Function을 로컬에서 불러 보기 전에
 npm run dev:emu               # 에뮬레이터에 연결해서 실행 (VITE_USE_EMULATOR=1)
 npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only firestore "npm run test:rules"   # 보안 규칙 테스트
 ```

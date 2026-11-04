@@ -3,7 +3,7 @@
 학생별 주간 계획표, 100분 집중 + 20분 인출 타이머, 공부 시작 인증, 카톡 보고, 강사 현황판을 한곳에 모은 웹앱입니다.
 
 - 화면: HTML + Tailwind CSS (Vite로 빌드)
-- 로그인·데이터: Firebase (Authentication + Firestore), 무료(Spark) 요금제
+- 로그인·데이터: Firebase (Authentication + Firestore + 알림용 Cloud Functions), Blaze 요금제 (무료 사용량 안에서 사용)
 - 배포: GitHub Pages (main 브랜치에 올리면 자동 배포)
 - 주소: https://seungminggg-cyber.github.io/study-planner/
 
@@ -19,19 +19,22 @@
 
 ## 폰 알림 설정 (앱이 꺼져 있어도 오는 알림)
 
-GitHub가 10분마다 `scripts/push/send.mjs`를 실행해서 보낼 알림이 있으면 보내요. (무료 방식이라 몇 분 늦게 올 수 있어요)
+Firebase Cloud Functions(`functions/index.js`)가 **5분마다** 보낼 알림이 있으면 보내요. (Blaze 요금제, 학생 수가 적으면 거의 0원)
+Firebase가 15분 넘게 멈추면 GitHub(`scripts/push/send.mjs`)가 예비로 대신 보내요. (수십 분마다라 늦을 수 있어요)
 
 1. Firebase 콘솔 → ⚙️ 프로젝트 설정 → **서비스 계정** → **새 비공개 키 생성** → JSON 파일이 내려받아져요
 2. GitHub 저장소 → Settings → Secrets and variables → **Actions** → **New repository secret**
    - Name: `FIREBASE_SERVICE_ACCOUNT`
    - Secret: 내려받은 JSON 파일을 메모장으로 열어 **전체 내용**을 붙여넣기 → Add secret
 3. 내려받은 JSON 파일은 지우기 (Firebase 전체 열쇠라서 다른 곳에 두면 안 돼요)
-4. GitHub 저장소 → **Actions** → **Send phone notifications** → **Run workflow**로 한 번 실행
-5. 앱 [설정] → 폰 알림 **켜기**, **이 기기에서 선생님 알림 받기** → '알림 서버 마지막 확인: 방금 전'이 보이면 성공
-6. 학생은 앱 위쪽 🔔 버튼 → **이 폰에서 알림 켜기** (아이폰은 먼저 홈 화면에 추가해야 해요)
+4. Firebase 콘솔 → **Blaze 요금제로 업그레이드** (예산 알림 설정 권장)
+5. [Google Cloud IAM](https://console.cloud.google.com/iam-admin/iam?project=seungmin-planner) → `firebase-adminsdk-…` 계정에 **편집자**, **Cloud Run 관리자** 역할 추가
+6. GitHub 저장소 → **Actions** → **Deploy Firebase functions** → **Run workflow** (알림 코드가 바뀌면 자동으로 다시 배포돼요)
+7. 앱 [설정] → 폰 알림 **켜기**, **이 기기에서 선생님 알림 받기** → '알림 서버 마지막 확인: 방금 전 (Firebase · 5분마다)'가 보이면 성공
+8. 학생은 앱 위쪽 🔔 버튼 → **이 폰에서 알림 켜기** (아이폰은 먼저 홈 화면에 추가해야 해요)
 
-- 저장소에 60일 동안 아무 변화가 없으면 GitHub가 10분마다 실행을 멈춰요. 그때는 Actions 탭에서 다시 켜 주세요.
 - 새벽 2시~6시는 알림을 보내지 않아요.
+- 예비 서버는 저장소에 60일 동안 아무 변화가 없으면 GitHub가 멈춰요. 그때는 Actions 탭에서 다시 켜 주세요.
 
 ## 사용 흐름
 
@@ -67,4 +70,5 @@ npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only fi
 - `src/timer.js` — 끝나는 시각 기준 공부 타이머 (화면이 꺼져도 정확)
 - `src/views/stats.js` — 주간·월간 그래프
 - `src/push.js`, `src/views/pushSettings.js`, `public/sw.js` — 폰 알림 켜기·끄기와 알림 띄우기
-- `scripts/push/` — 10분마다 알림을 보내는 서버 스크립트 (`.github/workflows/push.yml`)
+- `functions/` — 5분마다 알림을 보내는 Firebase Cloud Functions (`.github/workflows/functions.yml`로 배포)
+- `scripts/push/` — 알림 판단(`plan.mjs`)·보내기(`run.mjs`) 공용 코드, GitHub 예비 서버(`send.mjs`, `.github/workflows/push.yml`)

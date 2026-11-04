@@ -1,0 +1,12 @@
+{
+  "name": "planner-functions",
+  "private": true,
+  "type": "module",
+  "description": "Firebase Cloud Functions: 5분마다 폰 알림 보내기",
+  "main": "index.js",
+  "engines": { "node": "22" },
+  "dependencies": {
+    "firebase-admin": "13.0.2",
+    "firebase-functions": "7.4.0"
+  }
+}

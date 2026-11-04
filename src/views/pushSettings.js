@@ -65,16 +65,19 @@ function deviceBox(who) {
 function serverStatus() {
   const st = S.t.pushStatus;
   if (!st?.lastRun) {
-    return html`<p class="text-xs rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>알림 서버가 아직 한 번도 실행되지 않았어요. GitHub에 서비스 계정 키(FIREBASE_SERVICE_ACCOUNT)를 넣어야 알림이 나가요.</p>`;
+    return html`<p class="text-xs rounded-lg bg-amber-50 border border-amber-200 text-amber-900 px-3 py-2"><i class="fa-solid fa-triangle-exclamation mr-1"></i>알림 서버가 아직 한 번도 실행되지 않았어요. 서버 설정을 마쳐야 알림이 나가요.</p>`;
   }
-  const stale = Date.now() - st.lastRun > 40 * 60000;
+  // Firebase는 5분마다, GitHub(예비)는 GitHub 사정에 따라 수십 분마다 돌아요
+  const firebase = st.runner === 'firebase';
+  const where = firebase ? 'Firebase · 5분마다' : 'GitHub 예비 서버 · 수십 분마다';
+  const stale = Date.now() - st.lastRun > (firebase ? 20 : 70) * 60000;
   if (st.note && st.note.startsWith('오류')) {
     return html`<p class="text-xs rounded-lg bg-rose-50 border border-rose-200 text-rose-800 px-3 py-2"><i class="fa-solid fa-circle-exclamation mr-1"></i>알림 서버 ${ago(st.lastRun)} 실행 중 ${st.note}</p>`;
   }
   return html`
     <p class="text-xs rounded-lg px-3 py-2 ${stale ? 'bg-amber-50 border border-amber-200 text-amber-900' : 'bg-planner-light/60 text-planner-dark'}">
       <i class="fa-solid ${stale ? 'fa-triangle-exclamation' : 'fa-circle-check'} mr-1"></i>
-      알림 서버 마지막 확인: ${ago(st.lastRun)}${stale ? ' (평소엔 10분마다 확인해요. 새벽 2~6시는 쉬어요)' : ''}
+      알림 서버 마지막 확인: ${ago(st.lastRun)} (${where})${stale ? ' — 새벽 2~6시는 쉬어요' : ''}
     </p>`;
 }
 
@@ -88,7 +91,7 @@ export function pushCard() {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 class="card-title"><i class="fa-solid fa-mobile-screen-button"></i>폰 알림 (앱이 꺼져 있어도)</h3>
-          <p class="card-desc">10분마다 확인해서 보내요. 그래서 몇 분 늦게 도착할 수 있어요.</p>
+          <p class="card-desc">5분마다 확인해서 보내요. 그래서 몇 분 늦게 도착할 수 있어요.</p>
         </div>
         <label class="flex items-center gap-2 cursor-pointer select-none">
           <span class="text-sm font-black ${cfg.on ? 'text-planner-green' : 'text-slate-500'}">${cfg.on ? '켜짐' : '꺼짐'}</span>
@@ -179,7 +182,7 @@ export const pushActions = {
     if (timer.running) return toast('타이머가 돌아가는 중에는 테스트를 할 수 없어요. 타이머를 멈춘 뒤 눌러 주세요.', 'error');
     if (!pushConfig(S.config).on) return toast('먼저 선생님 [설정]에서 폰 알림을 켜야 해요.', 'error');
     await requestTestPush(S.user.uid);
-    toast('📨 테스트 알림을 요청했어요. 10분 안에 이 기기로 "알림 테스트 성공!"이 와요. 앱은 닫아도 돼요.');
+    toast('📨 테스트 알림을 요청했어요. 보통 5분 안에 이 기기로 "알림 테스트 성공!"이 와요. 앱은 닫아도 돼요.');
   },
   'open-push-settings': () => {
     S.ui.modal = { type: 'pushSettings' };
