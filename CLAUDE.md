@@ -62,6 +62,7 @@ npx -y firebase-tools@13.29.1 emulators:exec --project demo-rules-test --only fi
   - 모드 저장·적용은 `src/theme.js`, 깜빡임 방지는 index.html 머리의 짧은 스크립트.
 - `src/firebase.js` — Firestore는 `persistentLocalCache`(로그인 유지 기기만, 아니면 메모리). 로그아웃하면 `clearLocalDataAndReload()`로 기기 기록 삭제. 저장은 `data.js`의 `settle()`로 서버 확인을 2.5초까지만 기다림(오프라인이어도 화면이 멈추지 않게, 나중에 실패하면 토스트).
 - 역할 `ended`(수강 종료): `users.status='ended'`, `endedAt`. 규칙상 계획표·일정 못 봄. 현황판·알림에서 빠짐. 동의 화면은 student/pending만(`needsConsent`, `CONSENT_VERSION`).
+- 구글 로그인: 배포 사이트는 `src/googleSignIn.js`(Google Identity Services 버튼 → `signInWithCredential`). 예전 `signInWithPopup`은 firebaseapp.com 도우미를 거쳐서 아이폰 사파리에서 "missing initial state" 오류가 났음. OAuth 웹 클라이언트(`828874203333-q759…`)의 '승인된 자바스크립트 원본'에 github.io 주소가 있어야 함. 에뮬레이터·스크립트 못 불러올 때는 예전 팝업 방식. 버튼 칸은 `data-keep`(morphdom이 안을 건드리지 않음).
 - `src/views/events.js` — 일정(`events/{uid}.items`), 학생 [일정] 탭·강사 [학생]→[일정]·오늘 화면 D-day 띠. `src/views/privacy.js` — 개인정보 안내·동의 화면.
 - 피드백: `tasks.{id}.fb/fbAt`, `days.{날짜}.fb/fbAt`(강사가 씀). 학생이 본 시각은 기기 localStorage `fbSeen:{uid}`. 보고 있는 날은 바로 본 것으로 처리.
 - 과제 묶음: `templates/{id}` {name, tasks[]}(강사만). 다른 학생 복사는 `freshTaskCopies`(진행·메모·피드백 빼고, 이월 과제 제외). 번호 올리기는 `numberToken`/`bumpTitle`/`seriesOffsets`(week.js).
